@@ -32,4 +32,46 @@ window.CAT = {
   ramos: ['Vehículos', 'Gastos médicos', 'Vida', 'Hogar / Daños', 'Empresarial', 'Fianzas', 'Accidentes personales', 'Otro'],
   formasPago: ['Anual', 'Semestral', 'Trimestral', 'Mensual'],
   estadosPoliza: ['Vigente', 'Cancelada', 'No renovada'],
+
+  // Nombres alternativos para reconocer la aseguradora al importar desde Excel.
+  aliasAseguradoras: {
+    'Seguros G&T': ['g&t', 'gyt', 'g y t', 'g t'],
+    'Seguros El Roble': ['roble'],
+    'Seguros Ceiba': ['ceiba'],
+    'Mapfre': ['mapfre'],
+    'Seguros BAM': ['bam', 'agromercantil'],
+    'Aseguradora Rural': ['rural'],
+    'CHN Seguros': ['chn', 'credito hipotecario'],
+    'Aseguradora Guatemalteca': ['guatemalteca'],
+    'Seguros Privanza': ['privanza'],
+    'Seguros Universales': ['universales'],
+    'Aseguradora General': ['general'],
+  },
+
+  metodosPago: ['Efectivo', 'Transferencia', 'Depósito', 'Tarjeta', 'Cheque', 'Cobro directo aseguradora'],
+
+  // Plantillas de WhatsApp iniciales (luego se editan desde el CRM, sección "Plantillas").
+  // Variables: {nombre} {nombre_completo} {empresa} {aseguradora} {ramo} {poliza} {vence}
+  //            {monto} {saldo} {tramite} {estado} {pendientes}
+  plantillas: {
+    seguros: [
+      { nombre: 'Cumpleaños', texto: '¡Feliz cumpleaños, {nombre}! 🎉🎂\n\nDe parte de todo el equipo de {empresa} le deseamos un año lleno de salud, bendiciones y muchos éxitos. Gracias por permitirnos cuidar de lo que más valora. 🙏' },
+      { nombre: 'Bienvenida', texto: 'Hola {nombre}, ¡bienvenido(a) a {empresa}! 🤝\n\nEs un gusto acompañarle. Guarde este número: estamos para servirle en cualquier consulta, reclamo o cotización que necesite.' },
+      { nombre: 'Saludo / seguimiento', texto: 'Hola {nombre}, ¿cómo está? 😊 Le saluda {empresa}. Solo queríamos saber cómo le va y recordarle que estamos a la orden para lo que necesite.' },
+      { nombre: 'Recordatorio de renovación', texto: 'Buen día {nombre}, le saluda {empresa}. Le recordamos que su póliza de {ramo} con {aseguradora} vence el {vence}. ¿Le ayudamos con la renovación? Con gusto le cotizamos las mejores opciones. 📋' },
+      { nombre: 'Recordatorio de pago', texto: 'Hola {nombre}, un gusto saludarle. Le recordamos amablemente el pago de su póliza de {ramo} con {aseguradora} por {monto}. Cualquier consulta estamos a la orden. ¡Gracias! 🙌' },
+      { nombre: 'Gracias por su pago', texto: '¡Muchas gracias, {nombre}! ✅ Confirmamos la recepción de su pago. Su póliza de {ramo} con {aseguradora} sigue protegiéndole. Gracias por su confianza.' },
+      { nombre: 'Felices fiestas', texto: '{nombre}, en estas fiestas todo el equipo de {empresa} le desea mucha paz, unión y un próspero año nuevo junto a sus seres queridos. 🎄✨' },
+    ],
+    byc: [
+      { nombre: 'Cumpleaños', texto: '¡Feliz cumpleaños, {nombre}! 🎉🎂\n\nDe parte de {empresa} le deseamos un año lleno de salud, bendiciones y éxitos. Es un honor contar con su confianza. 🙏' },
+      { nombre: 'Bienvenida', texto: 'Hola {nombre}, gracias por confiar en {empresa}. 🤝 Guarde este número; por aquí le mantendremos al tanto de su trámite y estamos para resolver cualquier duda.' },
+      { nombre: 'Saludo / seguimiento', texto: 'Hola {nombre}, ¿cómo está? 😊 Le saluda {empresa}. Queríamos saludarle y recordarle que estamos a la orden para cualquier asesoría legal o notarial.' },
+      { nombre: 'Avance del trámite', texto: 'Buen día {nombre}, le saluda {empresa}. Le informamos que su trámite de {tramite} se encuentra en estado: *{estado}*. Le mantendremos al tanto de cada avance.' },
+      { nombre: 'Documentos pendientes', texto: 'Hola {nombre}, para continuar con su trámite de {tramite} necesitamos lo siguiente:\n{pendientes}\n\nQuedamos atentos. ¡Gracias!' },
+      { nombre: 'Trámite listo', texto: '¡Buenas noticias, {nombre}! 🎉 Su trámite de {tramite} está listo para entrega. ¿Qué día y hora le queda bien pasar a nuestra oficina?' },
+      { nombre: 'Recordatorio de saldo', texto: 'Hola {nombre}, un gusto saludarle. Le recordamos amablemente el saldo pendiente de {saldo} por su trámite de {tramite}. ¡Gracias por su confianza!' },
+      { nombre: 'Felices fiestas', texto: '{nombre}, en estas fiestas {empresa} le desea mucha paz, unión y un próspero año nuevo junto a sus seres queridos. 🎄✨' },
+    ],
+  },
 };

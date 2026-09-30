@@ -15,6 +15,7 @@ create table if not exists clientes (
   direccion text,
   fuente text,
   etiquetas text,
+  fecha_nacimiento date,
   notas text,
   created_by text,
   created_at timestamptz default now()
@@ -62,6 +63,7 @@ create table if not exists polizas (
   ramo text,
   numero text,
   suma_asegurada numeric,
+  prima_neta numeric,
   prima numeric,
   forma_pago text,
   inicio date,
@@ -96,11 +98,35 @@ create table if not exists actividad (
   created_at timestamptz default now()
 );
 
+create table if not exists pagos (
+  id uuid primary key default gen_random_uuid(),
+  perfil text not null check (perfil in ('byc','seguros')),
+  ref_tipo text not null check (ref_tipo in ('poliza','expediente')),
+  ref_id uuid not null,
+  cliente_id uuid references clientes(id) on delete cascade,
+  fecha date not null default current_date,
+  monto numeric not null,
+  metodo text,
+  referencia text,
+  notas text,
+  created_by text,
+  created_at timestamptz default now()
+);
+
+create table if not exists plantillas (
+  id uuid primary key default gen_random_uuid(),
+  perfil text not null check (perfil in ('byc','seguros')),
+  nombre text not null,
+  texto text not null,
+  created_by text,
+  created_at timestamptz default now()
+);
+
 -- Seguridad: solo usuarios con sesión iniciada pueden leer/escribir.
 do $$
 declare t text;
 begin
-  foreach t in array array['clientes','prospectos','expedientes','polizas','tareas','actividad'] loop
+  foreach t in array array['clientes','prospectos','expedientes','polizas','tareas','actividad','pagos','plantillas'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "usuarios autenticados" on %I', t);
     execute format('create policy "usuarios autenticados" on %I for all to authenticated using (true) with check (true)', t);

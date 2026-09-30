@@ -40,7 +40,7 @@ a { color: inherit; }
 
 /* Componentes */
 .btn { background: var(--primary); color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; cursor: pointer; }
-body[data-perfil="byc"] .btn { background: var(--accent); }
+body[data-perfil="byc"] .btn:not(.sec):not(.wa):not(.danger) { background: var(--accent); }
 .btn.sec { background: #fff; color: var(--text); border: 1px solid var(--line); }
 .btn.sm { padding: 5px 10px; font-size: 13px; }
 .btn.danger { background: var(--bad); }
@@ -112,3 +112,12 @@ tr.click:hover { background: #fafafa; }
   .main { padding: 16px; }
   .grid2, .form { grid-template-columns: 1fr; }
 }
+
+/* Pagos, plantillas */
+.list-item.click { cursor: pointer; }
+.list-item.click:hover { background: #fafafa; }
+.pl-txt { white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+code { background: #eef0f4; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.modal-box h2 .aseg img { height: 34px; max-width: 120px; }
+details summary { cursor: pointer; }
+.side .foot button#respaldo { background: rgba(255,255,255,.28); }

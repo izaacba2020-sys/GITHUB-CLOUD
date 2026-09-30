@@ -41,7 +41,12 @@ function asegLogo(nombre) {
 }
 
 // ---------- Capa de datos (Supabase o modo demo en el navegador) ----------
-const ENTIDAD = { clientes: 'cliente', prospectos: 'prospecto', expedientes: 'expediente', polizas: 'póliza', tareas: 'tarea' };
+const ENTIDAD = { clientes: 'cliente', prospectos: 'prospecto', expedientes: 'expediente', polizas: 'póliza', tareas: 'tarea', pagos: 'pago', plantillas: 'plantilla' };
+
+function dbError(error) {
+  const falta = error.code === 'PGRST205' || error.code === 'PGRST204' || error.code === '42P01' || /could not find|does not exist/i.test(error.message);
+  toast(falta ? 'Falta actualizar la base de datos: corre el SQL de actualización en Supabase (ver README)' : 'Error: ' + error.message);
+}
 
 const db = {
   _local(t) { try { return JSON.parse(localStorage.getItem('crm_' + t) || '[]'); } catch { return []; } },
@@ -49,9 +54,47 @@ const db = {
 
   async list(t) {
     if (DEMO) return this._local(t).filter((r) => r.perfil === state.perfil).sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
-    const { data, error } = await sb.from(t).select('*').eq('perfil', state.perfil).order('created_at', { ascending: false }).limit(1000);
-    if (error) { toast('Error: ' + error.message); return []; }
+    const { data, error } = await sb.from(t).select('*').eq('perfil', state.perfil).order('created_at', { ascending: false }).limit(5000);
+    if (error) { dbError(error); return null; }
     return data;
+  },
+
+  // Todos los registros de ambos perfiles (para el respaldo).
+  async listAll(t) {
+    if (DEMO) return this._local(t);
+    const { data, error } = await sb.from(t).select('*').order('created_at', { ascending: true }).limit(20000);
+    if (error) { dbError(error); throw error; }
+    return data;
+  },
+
+  // Inserta muchos registros de una vez (importación y plantillas iniciales).
+  async insertMany(t, rows) {
+    if (!rows.length) return [];
+    const now = Date.now();
+    const keys = new Set(['id', 'perfil', 'created_by', 'created_at']);
+    rows.forEach((r) => Object.keys(r).forEach((k) => keys.add(k)));
+    const full = rows.map((r, i) => {
+      const o = {};
+      for (const k of keys) o[k] = r[k] === '' || r[k] === undefined ? null : r[k];
+      o.id = r.id || crypto.randomUUID();
+      o.perfil = state.perfil;
+      o.created_by = state.user.email;
+      o.created_at = new Date(now + i).toISOString();
+      return o;
+    });
+    if (DEMO) this._saveLocal(t, [...this._local(t), ...full]);
+    else {
+      for (let i = 0; i < full.length; i += 200) {
+        const { error } = await sb.from(t).insert(full.slice(i, i + 200));
+        if (error) { dbError(error); throw error; }
+      }
+    }
+    return full;
+  },
+
+  async removeWhere(t, col, val) {
+    if (DEMO) this._saveLocal(t, this._local(t).filter((r) => r[col] !== val));
+    else await sb.from(t).delete().eq(col, val);
   },
 
   async save(t, row, desc) {
@@ -69,7 +112,7 @@ const db = {
       const id = payload.id; delete payload.id;
       const q = nuevo ? sb.from(t).insert(payload) : sb.from(t).update(payload).eq('id', id);
       const { error } = await q;
-      if (error) { toast('Error: ' + error.message); throw error; }
+      if (error) { dbError(error); throw error; }
     }
     if (desc !== false) await this.log(nuevo ? 'creó' : 'editó', ENTIDAD[t], desc);
   },
@@ -78,7 +121,7 @@ const db = {
     if (DEMO) this._saveLocal(t, this._local(t).filter((r) => r.id !== id));
     else {
       const { error } = await sb.from(t).delete().eq('id', id);
-      if (error) { toast('Error: ' + error.message); throw error; }
+      if (error) { dbError(error); throw error; }
     }
     await this.log('eliminó', ENTIDAD[t], desc);
   },
@@ -94,9 +137,14 @@ const db = {
 };
 
 async function loadAll() {
-  const tablas = ['clientes', 'prospectos', 'tareas', 'actividad', PERFILES[state.perfil].modulo];
+  const tablas = ['clientes', 'prospectos', 'tareas', 'actividad', 'pagos', 'plantillas', 'polizas', 'expedientes'];
   const res = await Promise.all(tablas.map((t) => db.list(t)));
-  tablas.forEach((t, i) => (state.data[t] = res[i]));
+  tablas.forEach((t, i) => (state.data[t] = res[i] || []));
+  // La primera vez se guardan las plantillas de WhatsApp sugeridas para poder editarlas.
+  const iPl = tablas.indexOf('plantillas');
+  if (res[iPl] && !res[iPl].length) {
+    try { state.data.plantillas = await db.insertMany('plantillas', CAT.plantillas[state.perfil].map((p) => ({ ...p }))); } catch { /* ya notificado */ }
+  }
 }
 
 // ---------- Formularios genéricos ----------
@@ -155,6 +203,7 @@ const CAMPOS = {
     { k: 'nit', label: 'NIT' },
     { k: 'telefono', label: 'Teléfono / WhatsApp', type: 'tel' },
     { k: 'email', label: 'Correo', type: 'email' },
+    { k: 'fecha_nacimiento', label: 'Fecha de nacimiento 🎂', type: 'date' },
     { k: 'direccion', label: 'Dirección', full: true },
     { k: 'etiquetas', label: 'Etiquetas (separadas por coma)', full: true },
     { k: 'notas', label: 'Notas', type: 'textarea', full: true },
@@ -179,7 +228,7 @@ const CAMPOS = {
     { k: 'fecha_inicio', label: 'Fecha de inicio', type: 'date', def: today() },
     { k: 'fecha_limite', label: 'Fecha límite', type: 'date' },
     { k: 'honorarios', label: 'Honorarios (Q)', type: 'number' },
-    { k: 'anticipo', label: 'Pagado / anticipo (Q)', type: 'number' },
+    { k: 'anticipo', label: 'Anticipo inicial (Q)', type: 'number' },
     { k: 'notas', label: 'Notas', type: 'textarea', full: true },
   ],
   polizas: [
@@ -188,9 +237,10 @@ const CAMPOS = {
     { k: 'ramo', label: 'Ramo', type: 'select', options: CAT.ramos, req: true },
     { k: 'numero', label: 'No. de póliza' },
     { k: 'suma_asegurada', label: 'Suma asegurada (Q)', type: 'number' },
-    { k: 'prima', label: 'Prima anual (Q)', type: 'number' },
+    { k: 'prima_neta', label: 'Prima neta (Q)', type: 'number' },
+    { k: 'prima', label: 'Prima total anual (Q)', type: 'number' },
     { k: 'forma_pago', label: 'Forma de pago', type: 'select', options: CAT.formasPago },
-    { k: 'comision_pct', label: 'Comisión (%)', type: 'number' },
+    { k: 'comision_pct', label: 'Comisión (% sobre prima neta)', type: 'number' },
     { k: 'inicio', label: 'Inicio de vigencia', type: 'date' },
     { k: 'fin', label: 'Fin de vigencia', type: 'date', req: true },
     { k: 'estado', label: 'Estado', type: 'select', options: CAT.estadosPoliza, def: 'Vigente' },
@@ -225,7 +275,10 @@ function editar(t, row = {}, extra = {}) {
       if (t === 'expedientes' && !row.id) out.checklist = (CAT.checklists[out.tramite] || []).map((x) => ({ t: x, ok: false }));
       await db.save(t, out, descOf(t, out));
     },
-    onDelete: row.id ? () => db.remove(t, row.id, descOf(t, row)) : null,
+    onDelete: row.id ? async () => {
+      await db.remove(t, row.id, descOf(t, row));
+      if (t === 'polizas' || t === 'expedientes') await db.removeWhere('pagos', 'ref_id', row.id);
+    } : null,
   });
 }
 
@@ -238,7 +291,9 @@ const VISTAS = {
   polizas: { nombre: 'Pólizas', fn: vPolizas, perfil: 'seguros' },
   aseguradoras: { nombre: 'Aseguradoras', fn: vAseguradoras, perfil: 'seguros' },
   renovaciones: { nombre: 'Renovaciones', fn: vRenovaciones, perfil: 'seguros' },
+  cobros: { nombre: 'Cobros', fn: vCobros },
   agenda: { nombre: 'Agenda', fn: vAgenda },
+  plantillas: { nombre: 'WhatsApp', fn: vPlantillas },
   actividad: { nombre: 'Actividad', fn: vActividad },
 };
 
@@ -279,14 +334,14 @@ function vDashboard(el) {
   let extra = '';
   if (state.perfil === 'byc') {
     const activos = d.expedientes.filter((e) => !['Entregado', 'Cancelado'].includes(e.estado));
-    const saldo = d.expedientes.filter((e) => e.estado !== 'Cancelado').reduce((s, e) => s + (Number(e.honorarios || 0) - Number(e.anticipo || 0)), 0);
+    const saldo = d.expedientes.filter((e) => e.estado !== 'Cancelado').reduce((s, e) => s + estadoPagoExp(e).saldo, 0);
     kpis.push(['Expedientes activos', activos.length], ['Saldo por cobrar', money(saldo)]);
     const proximos = activos.filter((e) => e.fecha_limite).sort((a, b) => (a.fecha_limite > b.fecha_limite ? 1 : -1)).slice(0, 6);
     extra = `<div class="card"><h3>Expedientes con fecha límite próxima</h3>${proximos.map((e) => `<div class="list-item"><div><b>${esc(e.tramite)}</b> · ${esc(clienteNombre(e.cliente_id))}<div class="muted">${esc(e.estado)}</div></div>${venceBadge(e.fecha_limite)}</div>`).join('') || '<div class="empty">Sin fechas próximas</div>'}</div>`;
   } else {
     const vig = d.polizas.filter((p) => p.estado === 'Vigente');
     const prima = vig.reduce((s, p) => s + Number(p.prima || 0), 0);
-    const comision = vig.reduce((s, p) => s + Number(p.prima || 0) * Number(p.comision_pct || 0) / 100, 0);
+    const comision = vig.reduce((s, p) => s + primaBase(p) * Number(p.comision_pct || 0) / 100, 0);
     const porRenovar = vig.filter((p) => { const x = daysUntil(p.fin); return x !== null && x <= 60; });
     kpis.push(['Pólizas vigentes', vig.length], ['Por renovar (60 días)', porRenovar.length], ['Prima total vigente', money(prima)], ['Comisión estimada', money(comision)]);
     extra = `<div class="card"><h3>Próximas renovaciones</h3>${porRenovar.sort((a, b) => (a.fin > b.fin ? 1 : -1)).slice(0, 6).map((p) => `<div class="list-item"><div><b>${esc(clienteNombre(p.cliente_id))}</b><div class="muted">${esc(p.ramo)} · ${asegLogo(p.aseguradora)}</div></div>${venceBadge(p.fin)}</div>`).join('') || '<div class="empty">Nada por renovar pronto</div>'}</div>`;
@@ -297,10 +352,12 @@ function vDashboard(el) {
     <div class="grid2">
       <div class="card"><h3>Pendientes de hoy y atrasados</h3><div id="pend">${tareasPendientes().map(tareaItem).join('') || '<div class="empty">¡Todo al día! 🎉</div>'}</div></div>
       ${extra}
+      ${tarjetaCumpleanos()}
       <div class="card"><h3>Embudo de prospectos</h3>${etapas}</div>
       <div class="card"><h3>Actividad reciente</h3>${d.actividad.slice(0, 6).map(actItem).join('') || '<div class="empty">Sin actividad</div>'}</div>
     </div>`;
   bindTareas(el);
+  bindCumpleanos(el);
 }
 
 function venceBadge(fecha) {
@@ -313,7 +370,7 @@ function venceBadge(fecha) {
 
 function vClientes(el) {
   el.innerHTML = `
-    <div class="top"><input class="search" id="q" placeholder="Buscar nombre, DPI, NIT, teléfono..."><button class="btn" id="nuevo">+ Nuevo cliente</button></div>
+    <div class="top"><input class="search" id="q" placeholder="Buscar nombre, DPI, NIT, teléfono..."><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" id="importar">⬆ Importar Excel</button><button class="btn" id="nuevo">+ Nuevo cliente</button></div></div>
     <div class="card table-wrap"><table><thead><tr><th>Nombre</th><th>Teléfono</th><th>NIT</th><th>Fuente</th><th>Etiquetas</th></tr></thead><tbody id="rows"></tbody></table></div>`;
   const pinta = () => {
     const q = $('#q').value.toLowerCase();
@@ -323,6 +380,7 @@ function vClientes(el) {
   };
   $('#q').oninput = pinta;
   $('#nuevo').onclick = () => editar('clientes');
+  $('#importar').onclick = importarExcel;
   pinta();
 }
 
@@ -332,25 +390,28 @@ function fichaCliente(id) {
   const items = state.data[mod].filter((x) => x.cliente_id === id);
   const tareas = state.data.tareas.filter((x) => x.cliente_id === id);
   const itemsHtml = items.map((x) => mod === 'polizas'
-    ? `<div class="list-item"><div><b>${esc(x.ramo)}</b> · ${asegLogo(x.aseguradora)}<div class="muted">No. ${esc(x.numero || '—')} · ${money(x.prima)}</div></div>${venceBadge(x.fin)}</div>`
-    : `<div class="list-item"><div><b>${esc(x.tramite)}</b><div class="muted">${esc(x.descripcion)}</div></div><span class="badge">${esc(x.estado)}</span></div>`).join('') || '<div class="empty">Ninguno</div>';
+    ? `<div class="list-item click" data-pol="${x.id}"><div><b>${esc(x.ramo)}</b> · ${asegLogo(x.aseguradora)}<div class="muted">No. ${esc(x.numero || '—')} · ${money(x.prima)}</div></div><div style="text-align:right">${venceBadge(x.fin)}<br>${pagoBadge(estadoPagoPoliza(x))}</div></div>`
+    : `<div class="list-item"><div><b>${esc(x.tramite)}</b><div class="muted">${esc(x.descripcion)}</div></div><div style="text-align:right"><span class="badge">${esc(x.estado)}</span><br>${pagoBadge(estadoPagoExp(x))}</div></div>`).join('') || '<div class="empty">Ninguno</div>';
+  const dc = diasParaCumple(c.fecha_nacimiento);
   openModal(`
     <h2>${esc(c.nombre)}</h2>
     <div class="grid2 muted">
       <div>📞 ${esc(c.telefono || '—')}<br>✉️ ${esc(c.email || '—')}<br>📍 ${esc(c.direccion || '—')}</div>
-      <div>DPI: ${esc(c.dpi || '—')}<br>NIT: ${esc(c.nit || '—')}<br>Tipo: ${esc(c.tipo || '—')} · Fuente: ${esc(c.fuente || '—')}</div>
+      <div>DPI: ${esc(c.dpi || '—')}<br>NIT: ${esc(c.nit || '—')}<br>Tipo: ${esc(c.tipo || '—')} · Fuente: ${esc(c.fuente || '—')}<br>🎂 ${c.fecha_nacimiento ? fmtDate(c.fecha_nacimiento) + (dc === 0 ? ' · <b>¡Hoy cumple años!</b>' : dc <= 15 ? ` · en ${dc} días` : '') : '—'}</div>
     </div>
     ${c.notas ? `<p>${esc(c.notas)}</p>` : ''}
     <h3>${PERFILES[state.perfil].moduloNombre}</h3>${itemsHtml}
     <h3>Tareas</h3>${tareas.map(tareaItem).join('') || '<div class="empty">Ninguna</div>'}
     <div class="actions">
-      ${c.telefono ? `<a class="btn wa" target="_blank" href="${waLink(c.telefono, `Buen día ${c.nombre}, le saluda ${PERFILES[state.perfil].nombre}.`)}">WhatsApp</a>` : ''}
+      ${c.telefono ? '<button class="btn wa" id="wa">WhatsApp</button>' : ''}
       <button class="btn sec" id="addT">+ Tarea</button>
       <button class="btn sec" id="addM">+ ${mod === 'polizas' ? 'Póliza' : 'Expediente'}</button>
       <button class="btn sec" id="ed">Editar</button>
       <button class="btn sec" id="cerrar">Cerrar</button>
     </div>`);
   bindTareas($('#modal-box'));
+  $('#modal-box').querySelectorAll('[data-pol]').forEach((x) => (x.onclick = () => fichaPoliza(x.dataset.pol)));
+  if ($('#wa')) $('#wa').onclick = () => abrirWhatsApp({ cliente: c, plantilla: dc === 0 ? 'Cumpleaños' : undefined });
   $('#cerrar').onclick = closeModal;
   $('#ed').onclick = () => editar('clientes', c);
   $('#addT').onclick = () => editar('tareas', {}, { cliente_id: id });
@@ -404,16 +465,30 @@ function vExpedientes(el) {
     $('#lista').innerHTML = rows.map((x) => {
       const cl = x.checklist || [];
       const pct = cl.length ? Math.round(cl.filter((i) => i.ok).length / cl.length * 100) : 0;
-      const saldo = Number(x.honorarios || 0) - Number(x.anticipo || 0);
+      const r = estadoPagoExp(x);
       return `<div class="card">
         <div class="top" style="margin-bottom:8px"><div><b>${esc(x.tramite)}</b> · ${esc(clienteNombre(x.cliente_id))}<div class="muted">${esc(x.descripcion)}</div></div>
-          <div style="display:flex;gap:6px;align-items:center"><span class="badge">${esc(x.estado)}</span>${x.fecha_limite && !['Entregado', 'Cancelado'].includes(x.estado) ? venceBadge(x.fecha_limite) : ''}<button class="btn sec sm" data-ed="${x.id}">Editar</button></div></div>
+          <div style="display:flex;gap:6px;align-items:center"><span class="badge">${esc(x.estado)}</span>${x.fecha_limite && !['Entregado', 'Cancelado'].includes(x.estado) ? venceBadge(x.fecha_limite) : ''}<button class="btn wa sm" data-wa="${x.id}">WhatsApp</button><button class="btn sec sm" data-ed="${x.id}">Editar</button></div></div>
         <div class="grid2"><div class="checklist">${cl.map((i, n) => `<label><input type="checkbox" data-chk="${x.id}" data-n="${n}" ${i.ok ? 'checked' : ''}>${esc(i.t)}</label>`).join('')}
           <div class="progress"><div style="width:${pct}%"></div></div><div class="muted">${pct}% completado</div></div>
-          <div class="muted">Responsable: ${esc(x.responsable || '—')}<br>Inicio: ${fmtDate(x.fecha_inicio)}<br>Honorarios: ${money(x.honorarios)}<br>Pagado: ${money(x.anticipo)}<br><b style="color:${saldo > 0 ? 'var(--bad)' : 'var(--ok)'}">Saldo: ${money(saldo)}</b></div></div>
+          <div><div class="muted">Responsable: ${esc(x.responsable || '—')} · Inicio: ${fmtDate(x.fecha_inicio)}</div>
+            <div style="margin:8px 0 4px"><b>Honorarios</b> ${pagoBadge(r)}</div>${pagoBarra(r)}
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-pagar="${x.id}">+ Registrar pago</button>${r.pagos.length ? `<button class="btn sec sm" data-verpagos="${x.id}">Ver pagos (${r.pagos.length})</button>` : ''}</div></div></div>
       </div>`;
     }).join('') || '<div class="card empty">Sin expedientes</div>';
-    el.querySelectorAll('[data-ed]').forEach((b) => (b.onclick = () => editar('expedientes', state.data.expedientes.find((x) => x.id === b.dataset.ed))));
+    const exp = (id) => state.data.expedientes.find((x) => x.id === id);
+    el.querySelectorAll('[data-ed]').forEach((b) => (b.onclick = () => editar('expedientes', exp(b.dataset.ed))));
+    el.querySelectorAll('[data-pagar]').forEach((b) => (b.onclick = () => registrarPago('expediente', exp(b.dataset.pagar))));
+    el.querySelectorAll('[data-wa]').forEach((b) => (b.onclick = () => { const x = exp(b.dataset.wa); abrirWhatsApp({ cliente: state.data.clientes.find((c) => c.id === x.cliente_id), expediente: x }); }));
+    el.querySelectorAll('[data-verpagos]').forEach((b) => (b.onclick = () => {
+      const x = exp(b.dataset.verpagos), r = estadoPagoExp(x);
+      openModal(`<h2>Pagos · ${esc(x.tramite)} · ${esc(clienteNombre(x.cliente_id))}</h2>${pagoBarra(r)}${x.anticipo ? `<p class="muted">Incluye anticipo inicial de ${money(x.anticipo)}</p>` : ''}<div style="margin-top:8px">${listaPagos(r.pagos)}</div>
+        <div class="actions"><button class="btn sec" id="saldo">✔ Marcar pagado</button><button class="btn" id="pago">+ Registrar pago</button><button class="btn sec" id="cerrar">Cerrar</button></div>`);
+      bindPagos($('#modal-box'));
+      $('#saldo').onclick = () => pagarSaldo('expediente', x);
+      $('#pago').onclick = () => registrarPago('expediente', x);
+      $('#cerrar').onclick = closeModal;
+    }));
     el.querySelectorAll('[data-chk]').forEach((cb) => (cb.onchange = async () => {
       const x = state.data.expedientes.find((e) => e.id === cb.dataset.chk);
       const cl = [...x.checklist]; cl[cb.dataset.n] = { ...cl[cb.dataset.n], ok: cb.checked };
@@ -427,17 +502,22 @@ function vExpedientes(el) {
 }
 
 function tablaPolizas(rows) {
-  return `<div class="card table-wrap"><table><thead><tr><th>Cliente</th><th>Aseguradora</th><th>Ramo</th><th>No. póliza</th><th>Prima</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>
+  return `<div class="card table-wrap"><table><thead><tr><th>Cliente</th><th>Aseguradora</th><th>Ramo</th><th>No. póliza</th><th>Prima</th><th>Pago</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>
     ${rows.map((p) => {
       const c = state.data.clientes.find((x) => x.id === p.cliente_id);
-      return `<tr class="click" data-id="${p.id}"><td><b>${esc(c?.nombre || '—')}</b></td><td>${asegLogo(p.aseguradora)}</td><td>${esc(p.ramo)}</td><td>${esc(p.numero)}</td><td>${money(p.prima)}<div class="muted">${esc(p.forma_pago)}</div></td>
+      return `<tr class="click" data-id="${p.id}"><td><b>${esc(c?.nombre || '—')}</b></td><td>${asegLogo(p.aseguradora)}</td><td>${esc(p.ramo)}</td><td>${esc(p.numero)}</td><td>${money(p.prima)}<div class="muted">${esc(p.forma_pago || '')}${p.prima_neta ? ' · neta ' + money(p.prima_neta) : ''}</div></td><td>${pagoBadge(estadoPagoPoliza(p))}</td>
       <td>${fmtDate(p.fin)}<br>${p.estado === 'Vigente' ? venceBadge(p.fin) : ''}</td><td><span class="badge">${esc(p.estado)}</span></td>
-      <td>${c?.telefono ? `<a class="btn wa sm" target="_blank" onclick="event.stopPropagation()" href="${waLink(c.telefono, `Buen día ${c.nombre}, le saluda Seguros Bobadilla. Le recordamos que su póliza de ${p.ramo} con ${p.aseguradora} vence el ${fmtDate(p.fin)}. ¿Le ayudamos con la renovación?`)}">WhatsApp</a>` : ''}</td></tr>`;
-    }).join('') || '<tr><td colspan="8" class="empty">Sin pólizas</td></tr>'}</tbody></table></div>`;
+      <td>${c?.telefono ? `<button class="btn wa sm" data-wa="${p.id}">WhatsApp</button>` : ''}</td></tr>`;
+    }).join('') || '<tr><td colspan="9" class="empty">Sin pólizas</td></tr>'}</tbody></table></div>`;
 }
 
 function bindPolizas(el) {
-  el.querySelectorAll('tr[data-id]').forEach((tr) => (tr.onclick = () => editar('polizas', state.data.polizas.find((x) => x.id === tr.dataset.id))));
+  el.querySelectorAll('tr[data-id]').forEach((tr) => (tr.onclick = () => fichaPoliza(tr.dataset.id)));
+  el.querySelectorAll('[data-wa]').forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    const p = state.data.polizas.find((x) => x.id === b.dataset.wa);
+    abrirWhatsApp({ cliente: state.data.clientes.find((c) => c.id === p.cliente_id), poliza: p });
+  }));
 }
 
 function vPolizas(el) {
@@ -465,7 +545,7 @@ function vAseguradoras(el) {
       a, total: ps.length, vig: vig.length,
       clientes: new Set(ps.map((p) => p.cliente_id)).size,
       prima: vig.reduce((s, p) => s + Number(p.prima || 0), 0),
-      comision: vig.reduce((s, p) => s + Number(p.prima || 0) * Number(p.comision_pct || 0) / 100, 0),
+      comision: vig.reduce((s, p) => s + primaBase(p) * Number(p.comision_pct || 0) / 100, 0),
       renovar: vig.filter((p) => { const x = daysUntil(p.fin); return x !== null && x <= 60; }).length,
     };
   }).sort((x, y) => y.prima - x.prima || y.total - x.total);
@@ -517,12 +597,13 @@ async function render() {
   app.innerHTML = `<div class="layout">
     <nav class="side" id="side"><div class="brand"><img src="${P.logo}" alt="${esc(P.nombre)}"></div>
       ${Object.entries(VISTAS).filter(([, x]) => !x.perfil || x.perfil === state.perfil).map(([k, x]) => `<a href="#${k}" class="${k === v ? 'active' : ''}">${x.nombre}</a>`).join('')}
-      <div class="foot"><div>👤 ${esc(state.user.email)}</div><button id="cambiar">⇄ Cambiar a ${state.perfil === 'byc' ? 'Seguros' : 'B&C'}</button><button id="salir">Cerrar sesión</button></div>
+      <div class="foot"><div>👤 ${esc(state.user.email)}</div><button id="respaldo">⬇ Descargar todo en Excel</button><button id="cambiar">⇄ Cambiar a ${state.perfil === 'byc' ? 'Seguros' : 'B&C'}</button><button id="salir">Cerrar sesión</button></div>
     </nav>
     <main class="main"><div class="top"><div style="display:flex;gap:10px;align-items:center"><button class="btn sec menu-btn" id="menu">☰</button><h1>${VISTAS[v].nombre}</h1></div><span class="muted">${esc(P.nombre)}</span></div>
       ${DEMO ? '<div class="demo-banner">Modo demo: los datos se guardan solo en este navegador. Configura Supabase (ver README) para usarlo en la nube entre usuarios.</div>' : ''}
       <div id="view"><div class="empty">Cargando…</div></div></main></div>`;
   $('#menu').onclick = () => $('#side').classList.toggle('open');
+  $('#respaldo').onclick = exportarTodo;
   $('#cambiar').onclick = () => { state.perfil = state.perfil === 'byc' ? 'seguros' : 'byc'; localStorage.setItem('perfil', state.perfil); location.hash = 'dashboard'; render(); };
   $('#salir').onclick = async () => { if (!DEMO) await sb.auth.signOut(); state.user = null; state.perfil = null; localStorage.removeItem('perfil'); render(); };
   await loadAll();

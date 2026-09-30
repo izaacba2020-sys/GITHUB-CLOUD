@@ -24,6 +24,16 @@ En este modo los datos se guardan solo en ese navegador.
 > El plan gratis de Supabase pausa el proyecto si pasa 1 semana sin uso; se reactiva con un clic en el panel.
 > La llave *anon* puede ir en el código: los datos están protegidos por las políticas de `schema.sql` (solo usuarios con sesión).
 
+## Actualizaciones de la base de datos
+Si tu base de datos se creó antes de una actualización, corre en **SQL Editor** el archivo correspondiente (se puede correr más de una vez sin problema):
+- `supabase/actualizacion-1.sql`: cumpleaños, prima neta, pagos y plantillas de WhatsApp.
+
+## Funciones
+- **Importar Excel** (Clientes → ⬆ Importar Excel): relaciona tus columnas, revisa y confirma. No duplica clientes (mismo nombre, DPI o NIT) ni pólizas (mismo número y aseguradora).
+- **Descargar todo en Excel** (menú lateral): respaldo completo de ambos perfiles, una hoja por tabla.
+- **Pagos y cobros**: registra pagos parciales o completos por póliza o expediente; la sección *Cobros* muestra saldos pendientes.
+- **WhatsApp**: plantillas editables con variables como `{nombre}`, `{vence}` o `{monto}`, y cumpleaños próximos en *Inicio*.
+
 ## Personalizar
 - Trámites, checklists, aseguradoras, ramos y etapas: `js/catalogos.js`
 - Logos de aseguradoras: `assets/aseguradoras/` (ver `LEEME.txt`)
