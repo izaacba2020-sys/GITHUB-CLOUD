@@ -27,11 +27,13 @@ En este modo los datos se guardan solo en ese navegador.
 ## Actualizaciones de la base de datos
 Si tu base de datos se creó antes de una actualización, corre en **SQL Editor** el archivo correspondiente (se puede correr más de una vez sin problema):
 - `supabase/actualizacion-1.sql`: cumpleaños, prima neta, pagos y plantillas de WhatsApp.
+- `supabase/actualizacion-2.sql`: fotos mensuales de la cartera para la evolución año con año (Estadísticas).
 
 ## Funciones
 - **Importar Excel** (Clientes → ⬆ Importar Excel): relaciona tus columnas, revisa y confirma. No duplica clientes (mismo nombre, DPI o NIT) ni pólizas (mismo número y aseguradora).
 - **Descargar todo en Excel** (menú lateral): respaldo completo de ambos perfiles, una hoja por tabla.
 - **Pagos y cobros**: registra pagos parciales o completos por póliza o expediente; la sección *Cobros* muestra saldos pendientes.
+- **Estadísticas**: vencimientos por mes, primas por aseguradora y ramo, primas por cobrar en los próximos 12 meses, pagos recibidos y evolución de la cartera con comparativo año con año.
 - **WhatsApp**: plantillas editables con variables como `{nombre}`, `{vence}` o `{monto}`, y cumpleaños próximos en *Inicio*.
 
 ## Personalizar

@@ -122,11 +122,21 @@ create table if not exists plantillas (
   created_at timestamptz default now()
 );
 
+create table if not exists metricas (
+  id uuid primary key default gen_random_uuid(),
+  perfil text not null check (perfil in ('byc','seguros')),
+  periodo text not null,          -- 'AAAA-MM'
+  datos jsonb not null,
+  created_by text,
+  created_at timestamptz default now(),
+  unique (perfil, periodo)
+);
+
 -- Seguridad: solo usuarios con sesión iniciada pueden leer/escribir.
 do $$
 declare t text;
 begin
-  foreach t in array array['clientes','prospectos','expedientes','polizas','tareas','actividad','pagos','plantillas'] loop
+  foreach t in array array['clientes','prospectos','expedientes','polizas','tareas','actividad','pagos','plantillas','metricas'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "usuarios autenticados" on %I', t);
     execute format('create policy "usuarios autenticados" on %I for all to authenticated using (true) with check (true)', t);

@@ -145,6 +145,9 @@ async function loadAll() {
   if (res[iPl] && !res[iPl].length) {
     try { state.data.plantillas = await db.insertMany('plantillas', CAT.plantillas[state.perfil].map((p) => ({ ...p }))); } catch { /* ya notificado */ }
   }
+  // Foto mensual de la cartera para las estadísticas (una vez por sesión y perfil).
+  state._fotoOk ||= {};
+  if (!state._fotoOk[state.perfil]) { state._fotoOk[state.perfil] = true; guardarFotoMensual().catch(() => {}); }
 }
 
 // ---------- Formularios genéricos ----------
@@ -296,6 +299,7 @@ const VISTAS = {
   aseguradoras: { nombre: 'Aseguradoras', fn: vAseguradoras, perfil: 'seguros' },
   renovaciones: { nombre: 'Renovaciones', fn: vRenovaciones, perfil: 'seguros' },
   cobros: { nombre: 'Cobros', fn: vCobros },
+  estadisticas: { nombre: 'Estadísticas', fn: vEstadisticas },
   agenda: { nombre: 'Agenda', fn: vAgenda },
   plantillas: { nombre: 'WhatsApp', fn: vPlantillas },
   actividad: { nombre: 'Actividad', fn: vActividad },
