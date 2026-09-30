@@ -1,0 +1,5 @@
+Coloca aquí los logos de las aseguradoras en PNG con estos nombres exactos:
+aseguradora-general.png, seguros-el-roble.png, seguros-ceiba.png, mapfre.png, seguros-g-t.png,
+seguros-bam.png, aseguradora-rural.png, chn-seguros.png, aseguradora-guatemalteca.png,
+seguros-privanza.png, seguros-universales.png
+Si falta alguno, el CRM muestra solo el nombre.
