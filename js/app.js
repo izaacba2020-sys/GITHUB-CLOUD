@@ -179,7 +179,10 @@ function formModal({ titulo, campos, data = {}, onSave, onDelete }) {
       <button class="btn" id="ok">Guardar</button>
     </div>`);
   $('#cancel').onclick = closeModal;
-  if (onDelete) $('#del').onclick = async () => { if (confirm('¿Eliminar este registro?')) { await onDelete(); closeModal(); render(); } };
+  if (onDelete) $('#del').onclick = async () => {
+    if (!confirm('¿Eliminar este registro?')) return;
+    try { await onDelete(); closeModal(); render(); } catch { /* cancelado o ya notificado */ }
+  };
   $('#ok').onclick = async () => {
     const form = $('#f');
     if (!form.reportValidity()) return;
@@ -276,6 +279,7 @@ function editar(t, row = {}, extra = {}) {
       await db.save(t, out, descOf(t, out));
     },
     onDelete: row.id ? async () => {
+      if (t === 'clientes' && !confirm('⚠️ Al eliminar el cliente también se borran TODAS sus pólizas/expedientes, pagos y tareas.\n\nSi solo dejó de renovar, mejor marca la póliza como "No renovada".\n\n¿Eliminar de todas formas?')) throw new Error('cancelado');
       await db.remove(t, row.id, descOf(t, row));
       if (t === 'polizas' || t === 'expedientes') await db.removeWhere('pagos', 'ref_id', row.id);
     } : null,
@@ -368,17 +372,68 @@ function venceBadge(fecha) {
   return `<span class="badge ${cls}" title="${fmtDate(fecha)}">${txt}</span>`;
 }
 
+// Cuántas pólizas vigentes (o trámites activos) tiene el cliente.
+function situacionCliente(c) {
+  if (state.perfil === 'seguros') {
+    const ps = state.data.polizas.filter((p) => p.cliente_id === c.id);
+    const activos = ps.filter((p) => p.estado === 'Vigente').length;
+    const badge = activos ? `<span class="badge ok">${activos} vigente${activos > 1 ? 's' : ''}</span>` : ps.length ? '<span class="badge warn">Sin póliza vigente</span>' : '<span class="badge">Sin pólizas</span>';
+    return { activos, badge };
+  }
+  const xs = state.data.expedientes.filter((x) => x.cliente_id === c.id);
+  const activos = xs.filter((x) => !['Entregado', 'Cancelado'].includes(x.estado)).length;
+  return { activos, badge: activos ? `<span class="badge ok">${activos} activo${activos > 1 ? 's' : ''}</span>` : xs.length ? '<span class="badge">Trámites terminados</span>' : '<span class="badge">Sin trámites</span>' };
+}
+
+// Póliza que no se renovó o se canceló: se conserva el historial y se agenda volver a contactar.
+function bajaPoliza(p) {
+  const c = state.data.clientes.find((x) => x.id === p.cliente_id) || {};
+  const aniv = p.fin ? new Date(p.fin + 'T12:00') : new Date();
+  aniv.setMonth(aniv.getMonth() + 11); // un mes antes de la siguiente fecha de renovación
+  formModal({
+    titulo: `Baja de póliza · ${c.nombre || ''}`,
+    campos: [
+      { k: 'estado', label: '¿Qué pasó?', type: 'select', options: ['No renovada', 'Cancelada'], def: 'No renovada', req: true },
+      { k: 'motivo', label: 'Motivo', type: 'select', options: CAT.motivosBaja, req: true },
+      { k: 'detalle', label: 'Comentario (opcional)', full: true },
+      { k: 'recontactar', label: 'Volver a contactar el (vacío = no agendar)', type: 'date', def: aniv.toISOString().slice(0, 10) },
+    ],
+    data: {},
+    onSave: async (out) => {
+      const nota = `[${fmtDate(today())}] ${out.estado}: ${out.motivo}${out.detalle ? ' — ' + out.detalle : ''}`;
+      await db.save('polizas', { ...p, estado: out.estado, notas: [p.notas, nota].filter(Boolean).join('\n') }, `${out.estado}: ${p.ramo} ${p.aseguradora} · ${c.nombre} (${out.motivo})`);
+      if (out.recontactar) {
+        await db.save('tareas', { titulo: `Recontactar a ${c.nombre}: ofrecer ${p.ramo}`, tipo: 'Seguimiento', fecha: new Date(out.recontactar + 'T09:00').toISOString(), cliente_id: p.cliente_id, notas: nota }, false);
+      }
+    },
+  });
+  $('#f').insertAdjacentHTML('afterbegin', '<p class="full muted">El cliente y su historial no se borran. La póliza deja de contar en renovaciones, cobros y totales, y puedes reactivarla cuando quieras.</p>');
+}
+
+async function reactivarPoliza(p) {
+  if (!confirm('¿Reactivar esta póliza como Vigente? Recuerda actualizar las fechas de vigencia si es una renovación nueva.')) return;
+  await db.save('polizas', { ...p, estado: 'Vigente', notas: [p.notas, `[${fmtDate(today())}] Reactivada`].filter(Boolean).join('\n') }, `reactivada: ${p.ramo} ${p.aseguradora} · ${clienteNombre(p.cliente_id)}`);
+  toast('Póliza reactivada');
+  closeModal();
+  render();
+}
+
 function vClientes(el) {
   el.innerHTML = `
-    <div class="top"><input class="search" id="q" placeholder="Buscar nombre, DPI, NIT, teléfono..."><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" id="importar">⬆ Importar Excel</button><button class="btn" id="nuevo">+ Nuevo cliente</button></div></div>
-    <div class="card table-wrap"><table><thead><tr><th>Nombre</th><th>Teléfono</th><th>NIT</th><th>Fuente</th><th>Etiquetas</th></tr></thead><tbody id="rows"></tbody></table></div>`;
+    <div class="top"><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="search" id="q" placeholder="Buscar nombre, DPI, NIT, teléfono...">
+      <select id="fs" style="width:auto"><option value="">Todos los clientes</option><option value="activo">Con ${state.perfil === 'seguros' ? 'póliza vigente' : 'trámite activo'}</option><option value="ex">${state.perfil === 'seguros' ? 'Sin póliza vigente (recuperar)' : 'Sin trámite activo'}</option></select></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" id="importar">⬆ Importar Excel</button><button class="btn" id="nuevo">+ Nuevo cliente</button></div></div>
+    <div class="card table-wrap"><table><thead><tr><th>Nombre</th><th>Situación</th><th>Teléfono</th><th>NIT</th><th>Etiquetas</th></tr></thead><tbody id="rows"></tbody></table></div>`;
   const pinta = () => {
-    const q = $('#q').value.toLowerCase();
-    const rows = state.data.clientes.filter((c) => [c.nombre, c.dpi, c.nit, c.telefono, c.email, c.etiquetas].join(' ').toLowerCase().includes(q));
-    $('#rows').innerHTML = rows.map((c) => `<tr class="click" data-id="${c.id}"><td><b>${esc(c.nombre)}</b><div class="muted">${esc(c.email)}</div></td><td>${esc(c.telefono)}</td><td>${esc(c.nit)}</td><td>${esc(c.fuente)}</td><td>${(c.etiquetas || '').split(',').filter((x) => x.trim()).map((x) => `<span class="badge">${esc(x.trim())}</span>`).join(' ')}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Sin clientes</td></tr>';
+    const q = $('#q').value.toLowerCase(), fs = $('#fs').value;
+    const rows = state.data.clientes.filter((c) => {
+      const s = situacionCliente(c);
+      return (!fs || (fs === 'activo' ? s.activos > 0 : s.activos === 0)) && [c.nombre, c.dpi, c.nit, c.telefono, c.email, c.etiquetas].join(' ').toLowerCase().includes(q);
+    });
+    $('#rows').innerHTML = rows.map((c) => `<tr class="click" data-id="${c.id}"><td><b>${esc(c.nombre)}</b><div class="muted">${esc(c.email)}</div></td><td>${situacionCliente(c).badge}</td><td>${esc(c.telefono)}</td><td>${esc(c.nit)}</td><td>${(c.etiquetas || '').split(',').filter((x) => x.trim()).map((x) => `<span class="badge">${esc(x.trim())}</span>`).join(' ')}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Sin clientes</td></tr>';
     el.querySelectorAll('tr[data-id]').forEach((tr) => (tr.onclick = () => fichaCliente(tr.dataset.id)));
   };
-  $('#q').oninput = pinta;
+  $('#q').oninput = pinta; $('#fs').onchange = pinta;
   $('#nuevo').onclick = () => editar('clientes');
   $('#importar').onclick = importarExcel;
   pinta();
@@ -505,8 +560,8 @@ function tablaPolizas(rows) {
   return `<div class="card table-wrap"><table><thead><tr><th>Cliente</th><th>Aseguradora</th><th>Ramo</th><th>No. póliza</th><th>Prima</th><th>Pago</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>
     ${rows.map((p) => {
       const c = state.data.clientes.find((x) => x.id === p.cliente_id);
-      return `<tr class="click" data-id="${p.id}"><td><b>${esc(c?.nombre || '—')}</b></td><td>${asegLogo(p.aseguradora)}</td><td>${esc(p.ramo)}</td><td>${esc(p.numero)}</td><td>${money(p.prima)}<div class="muted">${esc(p.forma_pago || '')}${p.prima_neta ? ' · neta ' + money(p.prima_neta) : ''}</div></td><td>${pagoBadge(estadoPagoPoliza(p))}</td>
-      <td>${fmtDate(p.fin)}<br>${p.estado === 'Vigente' ? venceBadge(p.fin) : ''}</td><td><span class="badge">${esc(p.estado)}</span></td>
+      return `<tr class="click" data-id="${p.id}"><td><b>${esc(c?.nombre || '—')}</b></td><td>${asegLogo(p.aseguradora)}</td><td>${esc(p.ramo)}</td><td>${esc(p.numero)}</td><td>${money(p.prima)}<div class="muted">${esc(p.forma_pago || '')}${p.prima_neta ? ' · neta ' + money(p.prima_neta) : ''}</div></td><td>${p.estado === 'Vigente' ? pagoBadge(estadoPagoPoliza(p)) : '<span class="muted">—</span>'}</td>
+      <td>${fmtDate(p.fin)}<br>${p.estado === 'Vigente' ? venceBadge(p.fin) : ''}</td><td><span class="badge ${p.estado === 'Vigente' ? '' : 'warn'}">${esc(p.estado)}</span></td>
       <td>${c?.telefono ? `<button class="btn wa sm" data-wa="${p.id}">WhatsApp</button>` : ''}</td></tr>`;
     }).join('') || '<tr><td colspan="9" class="empty">Sin pólizas</td></tr>'}</tbody></table></div>`;
 }
@@ -525,14 +580,16 @@ function vPolizas(el) {
       <input class="search" id="q" placeholder="Buscar cliente o No. póliza...">
       <select id="fa" style="width:auto"><option value="">Todas las aseguradoras</option>${CAT.aseguradoras.map((x) => `<option>${esc(x)}</option>`).join('')}</select>
       <select id="fr" style="width:auto"><option value="">Todos los ramos</option>${CAT.ramos.map((x) => `<option>${esc(x)}</option>`).join('')}</select>
+      <select id="fe" style="width:auto">${[['Vigente', 'Vigentes'], ['baja', 'No renovadas / canceladas'], ['', 'Todas']].map(([v, l]) => `<option value="${v}">${l} (${state.data.polizas.filter((p) => (v === '' ? true : v === 'baja' ? p.estado !== 'Vigente' : p.estado === v)).length})</option>`).join('')}</select>
     </div><button class="btn" id="nuevo">+ Nueva póliza</button></div><div id="lista"></div>`;
   const pinta = () => {
-    const q = $('#q').value.toLowerCase(), fa = $('#fa').value, fr = $('#fr').value;
-    $('#lista').innerHTML = tablaPolizas(state.data.polizas.filter((p) => (!fa || p.aseguradora === fa) && (!fr || p.ramo === fr) && [clienteNombre(p.cliente_id), p.numero].join(' ').toLowerCase().includes(q)));
+    const q = $('#q').value.toLowerCase(), fa = $('#fa').value, fr = $('#fr').value, fe = $('#fe').value;
+    const okEstado = (p) => (fe === '' ? true : fe === 'baja' ? p.estado !== 'Vigente' : p.estado === fe);
+    $('#lista').innerHTML = tablaPolizas(state.data.polizas.filter((p) => okEstado(p) && (!fa || p.aseguradora === fa) && (!fr || p.ramo === fr) && [clienteNombre(p.cliente_id), p.numero].join(' ').toLowerCase().includes(q)));
     bindPolizas(el);
   };
   if (state.filtroAseg) { $('#fa').value = state.filtroAseg; state.filtroAseg = null; }
-  $('#q').oninput = pinta; $('#fa').onchange = pinta; $('#fr').onchange = pinta;
+  $('#q').oninput = pinta; $('#fa').onchange = pinta; $('#fr').onchange = pinta; $('#fe').onchange = pinta;
   $('#nuevo').onclick = () => editar('polizas');
   pinta();
 }

@@ -108,6 +108,7 @@ function fichaPoliza(id) {
       <button class="btn sec" id="saldo">✔ Marcar pagada</button>
       <button class="btn" id="pago">+ Registrar pago</button>
       <button class="btn sec" id="ed">Editar póliza</button>
+      ${p.estado === 'Vigente' ? '<button class="btn sec" id="baja">✖ No renovó / cancelar</button>' : '<button class="btn sec" id="reactivar">↺ Reactivar</button>'}
       <button class="btn sec" id="cerrar">Cerrar</button>
     </div>`);
   bindPagos($('#modal-box'));
@@ -115,6 +116,8 @@ function fichaPoliza(id) {
   $('#saldo').onclick = () => pagarSaldo('poliza', p);
   $('#pago').onclick = () => registrarPago('poliza', p);
   $('#ed').onclick = () => editar('polizas', p);
+  if ($('#baja')) $('#baja').onclick = () => bajaPoliza(p);
+  if ($('#reactivar')) $('#reactivar').onclick = () => reactivarPoliza(p);
   $('#cerrar').onclick = closeModal;
 }
 

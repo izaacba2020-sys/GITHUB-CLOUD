@@ -32,6 +32,8 @@ window.CAT = {
   ramos: ['Vehículos', 'Gastos médicos', 'Vida', 'Hogar / Daños', 'Empresarial', 'Fianzas', 'Accidentes personales', 'Otro'],
   formasPago: ['Anual', 'Semestral', 'Trimestral', 'Mensual'],
   estadosPoliza: ['Vigente', 'Cancelada', 'No renovada'],
+  motivosBaja: ['Precio / lo encontró más barato', 'Se fue con otra aseguradora o agente', 'Vendió el vehículo o bien asegurado',
+    'Ya no lo necesita', 'Problemas económicos', 'Mala experiencia con un reclamo', 'Falta de pago', 'Otro'],
 
   // Nombres alternativos para reconocer la aseguradora al importar desde Excel.
   aliasAseguradoras: {
