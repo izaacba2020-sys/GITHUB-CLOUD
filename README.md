@@ -5,6 +5,10 @@ pólizas con alertas de renovación, agenda, WhatsApp en un clic y bitácora de 
 
 Costo: **Q0**. Se usa Supabase (base de datos + usuarios, plan gratis) y Netlify o Vercel (hosting gratis).
 
+## En línea
+Publicado en Netlify desde la rama `claude/bold-hamilton-kets6r`: https://luminous-faun-f70381.netlify.app
+Cada cambio subido a esa rama se publica automáticamente.
+
 ## Probar ya (modo demo)
 Abre `index.html` con un servidor local (`python3 -m http.server`) y entra con cualquier correo.
 En este modo los datos se guardan solo en ese navegador.
