@@ -24,6 +24,16 @@ function aFecha(v) {
   return null;
 }
 
+// Algunos sistemas exportan "Excel" que en realidad es HTML, con letras como &#209; (Ñ).
+const ENTIDADES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const decodificar = (s) => s.replace(/&#(\d+);/g, (m, n) => String.fromCharCode(n)).replace(/&#x([0-9a-f]+);/gi, (m, n) => String.fromCharCode(parseInt(n, 16))).replace(/&(amp|lt|gt|quot|apos|nbsp);/g, (m, n) => ENTIDADES[n]);
+
+const MINUSCULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'e', 'van', 'von']);
+function nombrePropio(s) {
+  if (s !== s.toUpperCase() || !/[A-ZÁÉÍÓÚÑ]/.test(s)) return s;
+  return s.toLowerCase().split(/\s+/).map((w, i) => (i > 0 && MINUSCULAS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(' ');
+}
+
 function aNumero(v) {
   if (v === '' || v == null) return null;
   if (typeof v === 'number') return v;
@@ -69,13 +79,15 @@ const CAMPOS_CLIENTE_IMP = [
 ];
 const CAMPOS_POLIZA_IMP = [
   { k: 'aseguradora', label: 'Aseguradora', kw: ['aseguradora', 'compania', 'compania de seguros', 'cia'] },
-  { k: 'fin', label: 'Fin de vigencia / vence', kw: ['fin de vigencia', 'vencimiento', 'vence', 'fin', 'hasta', 'vigencia hasta', 'fecha de vencimiento', 'renovacion'], tipo: 'fecha' },
-  { k: 'inicio', label: 'Inicio de vigencia', kw: ['inicio de vigencia', 'inicio', 'desde', 'vigencia desde', 'fecha de inicio', 'emision'], tipo: 'fecha' },
+  { k: 'fin', label: 'Fin de vigencia / vence', kw: ['fin de vigencia', 'vighasta', 'vig hasta', 'vigencia hasta', 'vencimiento', 'vence', 'fin', 'hasta', 'fecha de vencimiento', 'renovacion'], tipo: 'fecha' },
+  { k: 'inicio', label: 'Inicio de vigencia', kw: ['inicio de vigencia', 'vigdesde', 'vig desde', 'vigencia desde', 'inicio', 'desde', 'fecha de inicio', 'emision'], tipo: 'fecha' },
   { k: 'ramo', label: 'Ramo / tipo de seguro', kw: ['ramo', 'tipo de seguro', 'producto', 'seguro', 'cobertura', 'tipo'] },
   { k: 'numero', label: 'No. de póliza', kw: ['no poliza', 'numero de poliza', 'poliza', 'no de poliza', 'num poliza', 'n poliza'] },
   { k: 'suma_asegurada', label: 'Suma asegurada', kw: ['suma asegurada', 'suma', 'valor asegurado'], tipo: 'num' },
-  { k: 'prima_neta', label: 'Prima neta', kw: ['prima neta', 'neta'], tipo: 'num' },
-  { k: 'prima', label: 'Prima total', kw: ['prima total', 'prima', 'total', 'prima anual'], tipo: 'num' },
+  { k: 'prima', label: 'Prima total', kw: ['prima total', 'total', 'prima anual'], tipo: 'num' },
+  { k: 'prima_neta', label: 'Prima neta', kw: ['prima neta', 'neta', 'prima'], tipo: 'num' },
+  { k: '_saldo', label: 'Saldo pendiente (lo demás se registra como pagado)', kw: ['saldo pendiente', 'saldo', 'pendiente'], tipo: 'num' },
+  { k: '_codigo', label: 'Código de asegurado', kw: ['codigo', 'codigo asegurado', 'codigo cliente', 'cod'] },
   { k: 'forma_pago', label: 'Forma de pago', kw: ['forma de pago', 'frecuencia', 'frecuencia de pago', 'pago'] },
   { k: 'comision_pct', label: 'Comisión %', kw: ['comision', 'porcentaje comision', 'comision %'], tipo: 'num' },
   { k: 'estado', label: 'Estado de la póliza', kw: ['estado', 'status', 'estatus'] },
@@ -106,8 +118,10 @@ function adivinarColumnas(headers, campos) {
   for (const pase of ['exacto', 'contiene']) {
     for (const f of campos) {
       if (mapa[f.id]) continue;
-      const h = headers.find((h) => !usadas.has(h) && f.kw.some((kw) => (pase === 'exacto' ? norm(h) === norm(kw) : tieneFrase(h, kw))));
-      if (h) { mapa[f.id] = h; usadas.add(h); }
+      for (const kw of f.kw) {
+        const h = headers.find((h) => !usadas.has(h) && (pase === 'exacto' ? norm(h) === norm(kw) : tieneFrase(h, kw)));
+        if (h) { mapa[f.id] = h; usadas.add(h); break; }
+      }
     }
   }
   return mapa;
@@ -142,7 +156,8 @@ async function importarExcel() {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+      // raw: los textos (ej. 02/08/2027) no se convierten con formato de EE. UU.; aFecha los interpreta como dd/mm/aaaa.
+      const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true, raw: true });
       mapeoImport(wb, wb.SheetNames[0]);
     } catch (err) {
       toast('No se pudo leer el archivo: ' + err.message);
@@ -169,6 +184,14 @@ function mapeoImport(wb, hoja) {
     <p class="muted">Encontré <b>${filas.length}</b> filas. Revisa que cada dato del CRM apunte a la columna correcta de tu Excel (ya adiviné las que pude).</p>
     ${grupo('cliente', 'Datos del cliente')}
     ${grupo(state.perfil === 'seguros' ? 'poliza' : 'expediente', state.perfil === 'seguros' ? 'Datos de la póliza (opcional)' : 'Datos del expediente (opcional)')}
+    <h3>Si tu Excel no trae alguna columna</h3>
+    <div class="form">${state.perfil === 'seguros' ? `
+      <div><label>Aseguradora para todas las filas</label><select id="fijo-aseguradora"><option value="">— No usar —</option>${CAT.aseguradoras.map((a) => `<option>${esc(a)}</option>`).join('')}</select></div>
+      <div><label>Ramo para todas las filas</label><select id="fijo-ramo"><option value="">— No usar —</option>${CAT.ramos.map((a) => `<option>${esc(a)}</option>`).join('')}</select></div>
+      <div class="full"><label class="check"><input type="checkbox" id="op-inicio" checked> Si no hay fecha de inicio, calcularla como 1 año antes del vencimiento</label></div>` : `
+      <div><label>Trámite para todas las filas</label><select id="fijo-tramite"><option value="">— No usar —</option>${CAT.tramites.map((a) => `<option>${esc(a)}</option>`).join('')}</select></div>`}
+      <div class="full"><label class="check"><input type="checkbox" id="op-nombres" checked> Convertir nombres en MAYÚSCULAS a formato normal (JUAN PÉREZ → Juan Pérez)</label></div>
+    </div>
     <div class="actions"><button class="btn sec" id="cancel">Cancelar</button><button class="btn" id="revisar">Revisar importación →</button></div>`);
   $('#cancel').onclick = closeModal;
   if ($('#hoja')) $('#hoja').onchange = () => mapeoImport(wb, $('#hoja').value);
@@ -176,17 +199,19 @@ function mapeoImport(wb, hoja) {
     const m = {};
     document.querySelectorAll('[data-map]').forEach((s) => { if (s.value) m[s.dataset.map] = s.value; });
     if (!m.c_nombre) return toast('Indica cuál columna tiene el nombre del cliente');
-    confirmarImport(planImport(filas, m, campos));
+    const val = (id) => ($(id) ? $(id).value : '');
+    const op = { aseguradora: val('#fijo-aseguradora'), ramo: val('#fijo-ramo'), tramite: val('#fijo-tramite'), inicio: $('#op-inicio')?.checked, nombres: $('#op-nombres').checked };
+    confirmarImport(planImport(filas, m, campos, op));
   };
 }
 
-function planImport(filas, m, campos) {
+function planImport(filas, m, campos, op = {}) {
   const seg = state.perfil === 'seguros';
   const valor = (fila, f) => {
     const v = m[f.id] ? fila[m[f.id]] : '';
     if (f.tipo === 'fecha') return aFecha(v);
     if (f.tipo === 'num') return aNumero(v);
-    const s = v instanceof Date ? aFecha(v) : String(v ?? '').trim();
+    const s = v instanceof Date ? aFecha(v) : decodificar(String(v ?? '')).trim();
     return s || null;
   };
   // Índice de clientes existentes para no duplicar
@@ -196,7 +221,7 @@ function planImport(filas, m, campos) {
   const buscar = (c) => [c.dpi && 'd:' + norm(c.dpi), c.nit && 't:' + norm(c.nit), c.nombre && 'n:' + norm(c.nombre)].filter(Boolean).map((k) => idx.get(k)).find(Boolean);
   const polizasExist = new Set(state.data.polizas?.map((p) => norm(p.aseguradora) + '|' + norm(p.numero)).filter((k) => !k.endsWith('|')));
 
-  const plan = { clientes: [], items: [], existentes: 0, sinNombre: 0, dupItems: 0, avisos: [] };
+  const plan = { clientes: [], items: [], pagos: [], existentes: 0, sinNombre: 0, dupItems: 0, avisos: [] };
   filas.forEach((fila, i) => {
     const c = {}, x = {};
     for (const f of campos) {
@@ -205,6 +230,10 @@ function planImport(filas, m, campos) {
       if (f.grupo === 'cliente') c[f.k] = v; else x[f.k] = v;
     }
     if (!c.nombre) { plan.sinNombre++; return; }
+    if (op.nombres) c.nombre = nombrePropio(c.nombre);
+    if (op.aseguradora && !x.aseguradora) x.aseguradora = op.aseguradora;
+    if (op.ramo && !x.ramo) x.ramo = op.ramo;
+    if (op.tramite && !x.tramite) x.tramite = op.tramite;
     if (c.telefono) c.telefono = String(c.telefono).replace(/\.0$/, '');
     if (c.tipo) c.tipo = buscarEn(CAT.tiposPersona, c.tipo, ALIAS_TIPO) || c.tipo;
     let cliente = buscar(c);
@@ -230,6 +259,16 @@ function planImport(filas, m, campos) {
       const clave = norm(x.aseguradora) + '|' + norm(x.numero);
       if (x.numero && polizasExist.has(clave)) { plan.dupItems++; return; }
       if (x.numero) polizasExist.add(clave);
+      if (x.prima == null && x.prima_neta != null && !m.x_prima) x.prima = x.prima_neta;
+      if (!x.inicio && x.fin && op.inicio) x.inicio = (Number(x.fin.slice(0, 4)) - 1) + x.fin.slice(4);
+      if (x._codigo) x.notas = [`Código de asegurado: ${x._codigo}`, x.notas].filter(Boolean).join('\n');
+      x.id = crypto.randomUUID();
+      // Con el saldo pendiente de la aseguradora, lo ya pagado se registra como un pago.
+      if (x._saldo != null && x.prima > 0) {
+        const pagado = Math.round((x.prima - x._saldo) * 100) / 100;
+        if (pagado > 0) plan.pagos.push({ ref_tipo: 'poliza', ref_id: x.id, cliente_id: cliente.id, fecha: x.inicio || today(), monto: pagado, notas: 'Pagado según cartera de la aseguradora (importación)' });
+      }
+      delete x._saldo; delete x._codigo;
     } else {
       const t = x.tramite && buscarEn(CAT.tramites, x.tramite, ALIAS_TRAMITES);
       if (!x.tramite) return;
@@ -251,6 +290,7 @@ function confirmarImport(plan) {
       <div class="kpi"><div class="v">${plan.clientes.length}</div><div class="l">Clientes nuevos</div></div>
       <div class="kpi"><div class="v">${plan.items.length}</div><div class="l">${nombreItems} nuevas</div></div>
       <div class="kpi"><div class="v">${plan.existentes}</div><div class="l">Filas de clientes que ya existían</div></div>
+      ${plan.pagos.length ? `<div class="kpi"><div class="v">${plan.pagos.length}</div><div class="l">Pólizas marcadas como pagadas</div></div>` : ''}
     </div>
     ${plan.sinNombre ? `<p class="muted">⚠️ ${plan.sinNombre} filas sin nombre se omitirán.</p>` : ''}
     ${plan.dupItems ? `<p class="muted">⚠️ ${plan.dupItems} ${nombreItems} ya existían (mismo número) y se omitirán.</p>` : ''}
@@ -266,6 +306,7 @@ function confirmarImport(plan) {
     try {
       await db.insertMany('clientes', plan.clientes.map(({ _nuevo, ...c }) => c));
       await db.insertMany(seg ? 'polizas' : 'expedientes', plan.items);
+      await db.insertMany('pagos', plan.pagos);
       await db.log('importó', 'Excel', `${plan.clientes.length} clientes y ${plan.items.length} ${nombreItems}`);
       closeModal();
       toast(`Listo: ${plan.clientes.length} clientes y ${plan.items.length} ${nombreItems} importados`);
