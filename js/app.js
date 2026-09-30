@@ -236,6 +236,7 @@ const VISTAS = {
   clientes: { nombre: 'Clientes', fn: vClientes },
   expedientes: { nombre: 'Expedientes', fn: vExpedientes, perfil: 'byc' },
   polizas: { nombre: 'Pólizas', fn: vPolizas, perfil: 'seguros' },
+  aseguradoras: { nombre: 'Aseguradoras', fn: vAseguradoras, perfil: 'seguros' },
   renovaciones: { nombre: 'Renovaciones', fn: vRenovaciones, perfil: 'seguros' },
   agenda: { nombre: 'Agenda', fn: vAgenda },
   actividad: { nombre: 'Actividad', fn: vActividad },
@@ -450,9 +451,34 @@ function vPolizas(el) {
     $('#lista').innerHTML = tablaPolizas(state.data.polizas.filter((p) => (!fa || p.aseguradora === fa) && (!fr || p.ramo === fr) && [clienteNombre(p.cliente_id), p.numero].join(' ').toLowerCase().includes(q)));
     bindPolizas(el);
   };
+  if (state.filtroAseg) { $('#fa').value = state.filtroAseg; state.filtroAseg = null; }
   $('#q').oninput = pinta; $('#fa').onchange = pinta; $('#fr').onchange = pinta;
   $('#nuevo').onclick = () => editar('polizas');
   pinta();
+}
+
+function vAseguradoras(el) {
+  const stats = CAT.aseguradoras.map((a) => {
+    const ps = state.data.polizas.filter((p) => p.aseguradora === a);
+    const vig = ps.filter((p) => p.estado === 'Vigente');
+    return {
+      a, total: ps.length, vig: vig.length,
+      clientes: new Set(ps.map((p) => p.cliente_id)).size,
+      prima: vig.reduce((s, p) => s + Number(p.prima || 0), 0),
+      comision: vig.reduce((s, p) => s + Number(p.prima || 0) * Number(p.comision_pct || 0) / 100, 0),
+      renovar: vig.filter((p) => { const x = daysUntil(p.fin); return x !== null && x <= 60; }).length,
+    };
+  }).sort((x, y) => y.prima - x.prima || y.total - x.total);
+  el.innerHTML = `<p class="muted">Resumen de tu cartera por aseguradora. Haz clic en una para ver sus pólizas.</p>
+    <div class="aseg-grid">${stats.map((s) => `<div class="card aseg-card" data-a="${esc(s.a)}">
+      <div class="aseg-logo"><span class="aseg-ini">${esc(s.a.split(' ').filter((w) => w.length > 2 || w === 'G&T').map((w) => w[0]).join('').slice(0, 3))}</span><img src="assets/aseguradoras/${slug(s.a)}.png" alt="" onload="this.previousElementSibling.remove()" onerror="this.remove()"></div>
+      <b>${esc(s.a)}</b>
+      <div class="muted">${s.vig} vigentes · ${s.total} en total · ${s.clientes} clientes</div>
+      <div>Prima: <b>${money(s.prima)}</b></div>
+      <div>Comisión est.: <b>${money(s.comision)}</b></div>
+      ${s.renovar ? `<span class="badge warn">${s.renovar} por renovar</span>` : ''}
+    </div>`).join('')}</div>`;
+  el.querySelectorAll('[data-a]').forEach((c) => (c.onclick = () => { state.filtroAseg = c.dataset.a; location.hash = 'polizas'; }));
 }
 
 function vRenovaciones(el) {
