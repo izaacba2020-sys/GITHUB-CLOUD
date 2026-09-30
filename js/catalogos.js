@@ -30,8 +30,21 @@ window.CAT = {
     'Seguros BAM', 'Aseguradora Rural', 'CHN Seguros', 'Aseguradora Guatemalteca', 'Seguros Privanza',
     'Seguros Universales'],
   ramos: ['Vehículos', 'Gastos médicos', 'Vida', 'Hogar / Daños', 'Empresarial', 'Fianzas', 'Accidentes personales', 'Otro'],
-  // Número de pagos en que se divide la prima anual.
-  formasPago: ['1 pago', '2 pagos', '3 pagos', '4 pagos', '6 pagos', '10 pagos', '12 pagos'],
+  // Número de pagos en que se divide la prima anual (máximo 12).
+  formasPago: ['1 pago', ...Array.from({ length: 11 }, (_, i) => `${i + 2} pagos`)],
+  // Cuotas permitidas según la modalidad. Pronto pago siempre es 1 pago.
+  cuotasPorModalidad: {
+    'Pronto pago (efectivo / transferencia)': [1],
+    'Visa cuotas': [3, 6, 9, 10, 12],
+    'Fraccionado (crédito de la aseguradora)': [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    'Débito a cuenta': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    'Otro': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+  },
+  // Máximo de cuotas que permite cada aseguradora (si no aparece, el máximo es 12). Ajustar según convenios.
+  maxCuotas: {
+    'Aseguradora General': { 'Visa cuotas': 10 },
+    'Mapfre': { 'Visa cuotas': 12, 'Fraccionado (crédito de la aseguradora)': 12 },
+  },
   // Cómo paga el cliente.
   modalidadesPago: ['Pronto pago (efectivo / transferencia)', 'Visa cuotas', 'Fraccionado (crédito de la aseguradora)', 'Débito a cuenta', 'Otro'],
   estadosPoliza: ['Vigente', 'Cancelada', 'No renovada'],

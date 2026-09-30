@@ -7,9 +7,18 @@ function numPagos(forma) {
   const n = parseInt(forma, 10);
   return n >= 1 && n <= 12 ? n : 1;
 }
-// Meses (0-11) en que cae cada cuota, a partir del mes de inicio: 2 pagos = cada 6 meses, 10 o 12 pagos = mes a mes.
+// Opciones de número de pagos según la modalidad y el máximo de la aseguradora.
+function opcionesCuotas(modalidad, aseguradora) {
+  const permitidas = CAT.cuotasPorModalidad[modalidad] || CAT.cuotasPorModalidad.Otro;
+  const max = CAT.maxCuotas[aseguradora]?.[modalidad] || 12;
+  return permitidas.filter((n) => n <= max).map((n) => (n === 1 ? '1 pago' : `${n} pagos`));
+}
+const PAGO_MENSUAL = ['Visa cuotas', 'Fraccionado (crédito de la aseguradora)', 'Débito a cuenta'];
+
+// Meses (0-11) en que cae cada cuota, a partir del mes de inicio.
+// Visa cuotas, fraccionado y débito = mes a mes; si no, repartidas en el año (2 pagos = cada 6 meses).
 function mesesDeCuota(p) {
-  const n = numPagos(p.forma_pago), cada = Math.floor(12 / n);
+  const n = numPagos(p.forma_pago), cada = PAGO_MENSUAL.includes(p.modalidad_pago) ? 1 : Math.floor(12 / n);
   const base = Number((p.inicio || p.fin || today()).slice(5, 7)) - 1;
   return Array.from({ length: n }, (_, k) => (base + k * cada) % 12);
 }

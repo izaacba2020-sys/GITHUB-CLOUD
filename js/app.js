@@ -245,8 +245,8 @@ const CAMPOS = {
     { k: 'suma_asegurada', label: 'Suma asegurada (Q)', type: 'number' },
     { k: 'prima_neta', label: 'Prima neta (Q)', type: 'number' },
     { k: 'prima', label: 'Prima total anual (Q)', type: 'number' },
-    { k: 'forma_pago', label: 'Número de pagos', type: 'select', options: () => opcionesConActual(CAT.formasPago, state.editando?.forma_pago) },
     { k: 'modalidad_pago', label: 'Modalidad de pago', type: 'select', options: CAT.modalidadesPago },
+    { k: 'forma_pago', label: 'Número de pagos (cuotas)', type: 'select', options: () => opcionesConActual(opcionesCuotas(state.editando?.modalidad_pago, state.editando?.aseguradora), state.editando?.forma_pago) },
     { k: 'comision_pct', label: 'Comisión (% sobre prima neta)', type: 'number' },
     { k: 'inicio', label: 'Inicio de vigencia', type: 'date' },
     { k: 'fin', label: 'Fin de vigencia', type: 'date', req: true },
@@ -292,6 +292,22 @@ function editar(t, row = {}, extra = {}) {
       if (t === 'polizas' || t === 'expedientes') await db.removeWhere('pagos', 'ref_id', row.id);
     } : null,
   });
+  if (t === 'polizas') enlazarCuotas();
+}
+
+// En el formulario de póliza, las cuotas disponibles cambian con la modalidad y la aseguradora.
+function enlazarCuotas() {
+  const mod = $('[name=modalidad_pago]'), aseg = $('[name=aseguradora]'), cuotas = $('[name=forma_pago]');
+  const actualizar = () => {
+    const ops = opcionesCuotas(mod.value, aseg.value);
+    const previo = cuotas.value;
+    cuotas.innerHTML = `<option value="">— Seleccionar —</option>${ops.map((o) => `<option>${o}</option>`).join('')}`;
+    cuotas.value = ops.includes(previo) ? previo : ops.length === 1 ? ops[0] : '';
+    const max = CAT.maxCuotas[aseg.value]?.[mod.value];
+    cuotas.previousElementSibling.textContent = `Número de pagos (cuotas)${max ? ` · ${aseg.value} permite hasta ${max}` : ''}`;
+  };
+  mod.addEventListener('change', actualizar);
+  aseg.addEventListener('change', actualizar);
 }
 
 // ---------- Vistas ----------
