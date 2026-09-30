@@ -30,7 +30,10 @@ window.CAT = {
     'Seguros BAM', 'Aseguradora Rural', 'CHN Seguros', 'Aseguradora Guatemalteca', 'Seguros Privanza',
     'Seguros Universales'],
   ramos: ['Vehículos', 'Gastos médicos', 'Vida', 'Hogar / Daños', 'Empresarial', 'Fianzas', 'Accidentes personales', 'Otro'],
-  formasPago: ['Anual', 'Semestral', 'Trimestral', 'Mensual'],
+  // Número de pagos en que se divide la prima anual.
+  formasPago: ['1 pago', '2 pagos', '3 pagos', '4 pagos', '6 pagos', '10 pagos', '12 pagos'],
+  // Cómo paga el cliente.
+  modalidadesPago: ['Pronto pago (efectivo / transferencia)', 'Visa cuotas', 'Fraccionado (crédito de la aseguradora)', 'Débito a cuenta', 'Otro'],
   estadosPoliza: ['Vigente', 'Cancelada', 'No renovada'],
   motivosBaja: ['Precio / lo encontró más barato', 'Se fue con otra aseguradora o agente', 'Vendió el vehículo o bien asegurado',
     'Ya no lo necesita', 'Problemas económicos', 'Mala experiencia con un reclamo', 'Falta de pago', 'Otro'],
@@ -50,7 +53,7 @@ window.CAT = {
     'Aseguradora General': ['general'],
   },
 
-  metodosPago: ['Efectivo', 'Transferencia', 'Depósito', 'Tarjeta', 'Cheque', 'Cobro directo aseguradora'],
+  metodosPago: ['Efectivo', 'Transferencia', 'Depósito', 'Visa cuotas', 'Tarjeta', 'Débito a cuenta', 'Cheque', 'Cobro directo aseguradora'],
 
   // Plantillas de WhatsApp iniciales (luego se editan desde el CRM, sección "Plantillas").
   // Variables: {nombre} {nombre_completo} {empresa} {aseguradora} {ramo} {poliza} {vence}

@@ -58,7 +58,13 @@ const ALIAS_RAMOS = {
   'Fianzas': ['fianza', 'fianzas'],
   'Accidentes personales': ['accidente', 'accidentes'],
 };
-const ALIAS_PAGO = { Mensual: ['mensual', 'mes'], Trimestral: ['trimestral'], Semestral: ['semestral'], Anual: ['anual', 'contado', 'unico'] };
+const ALIAS_PAGO = { '12 pagos': ['mensual', 'mes', '12'], '4 pagos': ['trimestral', '4'], '2 pagos': ['semestral', '2'], '1 pago': ['anual', 'contado', 'unico', '1'], '3 pagos': ['3'], '6 pagos': ['6'], '10 pagos': ['10'] };
+const ALIAS_MODALIDAD = {
+  'Visa cuotas': ['visa', 'visacuotas', 'tarjeta'],
+  'Fraccionado (crédito de la aseguradora)': ['fraccionado', 'fraccionamiento', 'credito'],
+  'Débito a cuenta': ['debito', 'debito a cuenta', 'cargo automatico'],
+  'Pronto pago (efectivo / transferencia)': ['pronto pago', 'efectivo', 'transferencia', 'contado', 'deposito'],
+};
 const ALIAS_ESTADO = { Vigente: ['vigente', 'activa', 'activo'], Cancelada: ['cancelada', 'anulada', 'cancelado'], 'No renovada': ['no renovada', 'vencida'] };
 const ALIAS_TIPO = { 'Jurídica': ['juridica', 'empresa', 'sociedad', 's a', 'sa'], Individual: ['individual', 'persona', 'natural'] };
 const ALIAS_TRAMITES = Object.fromEntries(CAT.tramites.map((t) => [t, [norm(t), norm(t).replace(/s$/, '')]]));
@@ -88,7 +94,8 @@ const CAMPOS_POLIZA_IMP = [
   { k: 'prima_neta', label: 'Prima neta', kw: ['prima neta', 'neta', 'prima'], tipo: 'num' },
   { k: '_saldo', label: 'Saldo pendiente (lo demás se registra como pagado)', kw: ['saldo pendiente', 'saldo', 'pendiente'], tipo: 'num' },
   { k: '_codigo', label: 'Código de asegurado', kw: ['codigo', 'codigo asegurado', 'codigo cliente', 'cod'] },
-  { k: 'forma_pago', label: 'Forma de pago', kw: ['forma de pago', 'frecuencia', 'frecuencia de pago', 'pago'] },
+  { k: 'modalidad_pago', label: 'Modalidad de pago (Visa cuotas, fraccionado…)', kw: ['modalidad de pago', 'modalidad', 'medio de pago', 'tipo de pago'] },
+  { k: 'forma_pago', label: 'Número de pagos / forma de pago', kw: ['numero de pagos', 'no de pagos', 'cuotas', 'forma de pago', 'frecuencia', 'frecuencia de pago', 'pagos', 'pago'] },
   { k: 'comision_pct', label: 'Comisión %', kw: ['comision', 'porcentaje comision', 'comision %'], tipo: 'num' },
   { k: 'estado', label: 'Estado de la póliza', kw: ['estado', 'status', 'estatus'] },
   { k: 'notas', label: 'Notas', kw: ['notas', 'observaciones', 'comentarios'] },
@@ -252,7 +259,13 @@ function planImport(filas, m, campos, op = {}) {
         x.aseguradora = a || x.aseguradora;
       }
       if (x.ramo) x.ramo = buscarEn(CAT.ramos, x.ramo, ALIAS_RAMOS) || x.ramo;
-      if (x.forma_pago) x.forma_pago = buscarEn(CAT.formasPago, x.forma_pago, ALIAS_PAGO) || x.forma_pago;
+      if (x.forma_pago) {
+        // "Visa 10 cuotas" -> 10 pagos + Visa cuotas
+        if (!x.modalidad_pago) x.modalidad_pago = buscarEn(CAT.modalidadesPago, x.forma_pago, ALIAS_MODALIDAD);
+        const n = String(x.forma_pago).match(/\d+/);
+        x.forma_pago = (n && CAT.formasPago.find((f) => parseInt(f, 10) === Number(n[0]))) || buscarEn(CAT.formasPago, x.forma_pago, ALIAS_PAGO) || x.forma_pago;
+      }
+      if (x.modalidad_pago) x.modalidad_pago = buscarEn(CAT.modalidadesPago, x.modalidad_pago, ALIAS_MODALIDAD) || x.modalidad_pago;
       x.estado = (x.estado && buscarEn(CAT.estadosPoliza, x.estado, ALIAS_ESTADO)) || 'Vigente';
       if (x.comision_pct != null && x.comision_pct > 0 && x.comision_pct < 1) x.comision_pct = Math.round(x.comision_pct * 10000) / 100;
       if (x.numero) x.numero = String(x.numero).replace(/\.0$/, '');
@@ -319,7 +332,7 @@ async function descargarPlantillaImport() {
   await cargarXLSX();
   const seg = state.perfil === 'seguros';
   const fila = seg
-    ? { 'Nombre': 'Juan Pérez López', 'Teléfono': '55551234', 'Correo': 'juan@correo.com', 'DPI': '', 'NIT': '1234567-8', 'Fecha de nacimiento': '15/03/1985', 'Dirección': 'Zona 1, Guatemala', 'Aseguradora': 'Mapfre', 'Ramo': 'Vehículos', 'No. póliza': 'AUTO-0001', 'Suma asegurada': 150000, 'Prima neta': 3000, 'Prima total': 3480, 'Forma de pago': 'Mensual', 'Comisión %': 15, 'Inicio de vigencia': '01/01/2026', 'Fin de vigencia': '01/01/2027', 'Estado': 'Vigente', 'Notas': '' }
+    ? { 'Nombre': 'Juan Pérez López', 'Teléfono': '55551234', 'Correo': 'juan@correo.com', 'DPI': '', 'NIT': '1234567-8', 'Fecha de nacimiento': '15/03/1985', 'Dirección': 'Zona 1, Guatemala', 'Aseguradora': 'Mapfre', 'Ramo': 'Vehículos', 'No. póliza': 'AUTO-0001', 'Suma asegurada': 150000, 'Prima neta': 3000, 'Prima total': 3480, 'Número de pagos': '10 pagos', 'Modalidad de pago': 'Visa cuotas', 'Comisión %': 15, 'Inicio de vigencia': '01/01/2026', 'Fin de vigencia': '01/01/2027', 'Estado': 'Vigente', 'Notas': '' }
     : { 'Nombre': 'María Gómez', 'Teléfono': '55554321', 'Correo': 'maria@correo.com', 'DPI': '', 'NIT': '', 'Fecha de nacimiento': '20/07/1990', 'Dirección': 'Zona 10, Guatemala', 'Trámite': 'Compraventa', 'Descripción': 'Terreno en Mixco', 'Estado': 'En proceso', 'Responsable': '', 'Fecha de inicio': '01/09/2026', 'Honorarios': 4000, 'Anticipo': 1500, 'Notas': '' };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([fila]), 'Clientes');
@@ -341,7 +354,7 @@ async function exportarTodo() {
   const fh = (s) => (s ? new Date(s).toLocaleString('es-GT') : '');
   const hojas = {
     Clientes: d.clientes.map((c) => ({ Perfil: perfil(c.perfil), Nombre: c.nombre, 'Tipo de persona': c.tipo, DPI: c.dpi, NIT: c.nit, 'Teléfono': c.telefono, Correo: c.email, 'Dirección': c.direccion, 'Fecha de nacimiento': c.fecha_nacimiento, Fuente: c.fuente, Etiquetas: c.etiquetas, Notas: c.notas, 'Creado por': c.created_by, 'Creado el': fh(c.created_at) })),
-    'Pólizas': d.polizas.map((p) => { const r = estadoPagoPoliza(p, d.pagos); return { Cliente: cn(p.cliente_id), Aseguradora: p.aseguradora, Ramo: p.ramo, 'No. póliza': p.numero, 'Suma asegurada': p.suma_asegurada, 'Prima neta': p.prima_neta, 'Prima total': p.prima, 'Forma de pago': p.forma_pago, 'Comisión %': p.comision_pct, 'Comisión Q': p.comision_pct ? Math.round(primaBase(p) * p.comision_pct) / 100 : null, 'Inicio de vigencia': p.inicio, 'Fin de vigencia': p.fin, Estado: p.estado, 'Pagado (vigencia)': r.pagado, Saldo: r.saldo, 'Estado de pago': r.estado, Notas: p.notas, 'Creado por': p.created_by }; }),
+    'Pólizas': d.polizas.map((p) => { const r = estadoPagoPoliza(p, d.pagos); return { Cliente: cn(p.cliente_id), Aseguradora: p.aseguradora, Ramo: p.ramo, 'No. póliza': p.numero, 'Suma asegurada': p.suma_asegurada, 'Prima neta': p.prima_neta, 'Prima total': p.prima, 'Número de pagos': p.forma_pago, 'Modalidad de pago': p.modalidad_pago, 'Comisión %': p.comision_pct, 'Comisión Q': p.comision_pct ? Math.round(primaBase(p) * p.comision_pct) / 100 : null, 'Inicio de vigencia': p.inicio, 'Fin de vigencia': p.fin, Estado: p.estado, 'Pagado (vigencia)': r.pagado, Saldo: r.saldo, 'Estado de pago': r.estado, Notas: p.notas, 'Creado por': p.created_by }; }),
     Expedientes: d.expedientes.map((x) => { const r = estadoPagoExp(x, d.pagos); return { Cliente: cn(x.cliente_id), 'Trámite': x.tramite, 'Descripción': x.descripcion, Estado: x.estado, Responsable: x.responsable, Inicio: x.fecha_inicio, 'Fecha límite': x.fecha_limite, Honorarios: x.honorarios, Anticipo: x.anticipo, 'Total pagado': r.pagado, Saldo: r.saldo, 'Requisitos completos': (x.checklist || []).filter((i) => i.ok).map((i) => i.t).join(', '), 'Requisitos pendientes': (x.checklist || []).filter((i) => !i.ok).map((i) => i.t).join(', '), Notas: x.notas, 'Creado por': x.created_by }; }),
     Pagos: d.pagos.map((pg) => { const ref = pg.ref_tipo === 'poliza' ? d.polizas.find((p) => p.id === pg.ref_id) : d.expedientes.find((x) => x.id === pg.ref_id); return { Perfil: perfil(pg.perfil), Fecha: pg.fecha, Cliente: cn(pg.cliente_id), Concepto: !ref ? '' : pg.ref_tipo === 'poliza' ? `Póliza ${ref.ramo} ${ref.aseguradora} ${ref.numero || ''}`.trim() : `Trámite ${ref.tramite}`, Monto: pg.monto, 'Método': pg.metodo, Referencia: pg.referencia, Notas: pg.notas, 'Registrado por': pg.created_by }; }),
     Prospectos: d.prospectos.map((p) => ({ Perfil: perfil(p.perfil), Oportunidad: p.titulo, Cliente: cn(p.cliente_id), Contacto: p.contacto, 'Teléfono': p.telefono, Servicio: p.servicio, Etapa: p.etapa, Monto: p.monto, Seguimiento: p.seguimiento, Notas: p.notas, 'Creado por': p.created_by, 'Creado el': fh(p.created_at) })),

@@ -245,7 +245,8 @@ const CAMPOS = {
     { k: 'suma_asegurada', label: 'Suma asegurada (Q)', type: 'number' },
     { k: 'prima_neta', label: 'Prima neta (Q)', type: 'number' },
     { k: 'prima', label: 'Prima total anual (Q)', type: 'number' },
-    { k: 'forma_pago', label: 'Forma de pago', type: 'select', options: CAT.formasPago },
+    { k: 'forma_pago', label: 'Número de pagos', type: 'select', options: () => opcionesConActual(CAT.formasPago, state.editando?.forma_pago) },
+    { k: 'modalidad_pago', label: 'Modalidad de pago', type: 'select', options: CAT.modalidadesPago },
     { k: 'comision_pct', label: 'Comisión (% sobre prima neta)', type: 'number' },
     { k: 'inicio', label: 'Inicio de vigencia', type: 'date' },
     { k: 'fin', label: 'Fin de vigencia', type: 'date', req: true },
@@ -271,8 +272,12 @@ function descOf(t, r) {
   return r.titulo;
 }
 
+// Mantiene visible un valor guardado que ya no está en el catálogo (p. ej. "Mensual" de antes del cambio).
+const opcionesConActual = (lista, actual) => (actual && !lista.includes(actual) ? [...lista, actual] : lista);
+
 function editar(t, row = {}, extra = {}) {
   const data = { ...extra, ...row };
+  state.editando = data;
   formModal({
     titulo: (row.id ? 'Editar ' : 'Nuevo ') + TITULOS[t].toLowerCase(),
     campos: CAMPOS[t],
@@ -564,7 +569,7 @@ function tablaPolizas(rows) {
   return `<div class="card table-wrap"><table><thead><tr><th>Cliente</th><th>Aseguradora</th><th>Ramo</th><th>No. póliza</th><th>Prima</th><th>Pago</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>
     ${rows.map((p) => {
       const c = state.data.clientes.find((x) => x.id === p.cliente_id);
-      return `<tr class="click" data-id="${p.id}"><td><b>${esc(c?.nombre || '—')}</b></td><td>${asegLogo(p.aseguradora)}</td><td>${esc(p.ramo)}</td><td>${esc(p.numero)}</td><td>${money(p.prima)}<div class="muted">${esc(p.forma_pago || '')}${p.prima_neta ? ' · neta ' + money(p.prima_neta) : ''}</div></td><td>${p.estado === 'Vigente' ? pagoBadge(estadoPagoPoliza(p)) : '<span class="muted">—</span>'}</td>
+      return `<tr class="click" data-id="${p.id}"><td><b>${esc(c?.nombre || '—')}</b></td><td>${asegLogo(p.aseguradora)}</td><td>${esc(p.ramo)}</td><td>${esc(p.numero)}</td><td>${money(p.prima)}<div class="muted">${esc(p.forma_pago || '')}${p.modalidad_pago ? ' · ' + esc(p.modalidad_pago.split(' (')[0]) : ''}${p.prima_neta ? ' · neta ' + money(p.prima_neta) : ''}</div></td><td>${p.estado === 'Vigente' ? pagoBadge(estadoPagoPoliza(p)) : '<span class="muted">—</span>'}</td>
       <td>${fmtDate(p.fin)}<br>${p.estado === 'Vigente' ? venceBadge(p.fin) : ''}</td><td><span class="badge ${p.estado === 'Vigente' ? '' : 'warn'}">${esc(p.estado)}</span></td>
       <td>${c?.telefono ? `<button class="btn wa sm" data-wa="${p.id}">WhatsApp</button>` : ''}</td></tr>`;
     }).join('') || '<tr><td colspan="9" class="empty">Sin pólizas</td></tr>'}</tbody></table></div>`;

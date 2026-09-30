@@ -66,6 +66,7 @@ create table if not exists polizas (
   prima_neta numeric,
   prima numeric,
   forma_pago text,
+  modalidad_pago text,
   inicio date,
   fin date,
   estado text,

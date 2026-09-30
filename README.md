@@ -27,7 +27,7 @@ En este modo los datos se guardan solo en ese navegador.
 ## Actualizaciones de la base de datos
 Si tu base de datos se creó antes de una actualización, corre en **SQL Editor** el archivo correspondiente (se puede correr más de una vez sin problema):
 - `supabase/actualizacion-1.sql`: cumpleaños, prima neta, pagos y plantillas de WhatsApp.
-- `supabase/actualizacion-2.sql`: fotos mensuales de la cartera para la evolución año con año (Estadísticas).
+- `supabase/actualizacion-2.sql`: fotos mensuales de la cartera para la evolución año con año (Estadísticas) y modalidad de pago de las pólizas.
 
 ## Funciones
 - **Importar Excel** (Clientes → ⬆ Importar Excel): relaciona tus columnas, revisa y confirma. No duplica clientes (mismo nombre, DPI o NIT) ni pólizas (mismo número y aseguradora).

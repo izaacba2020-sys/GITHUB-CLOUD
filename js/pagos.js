@@ -1,5 +1,19 @@
 /* Pagos y cobros: primas de pólizas y honorarios de expedientes */
-const PAGOS_POR_ANIO = { Anual: 1, Semestral: 2, Trimestral: 4, Mensual: 12 };
+// Número de pagos de la póliza: "6 pagos" -> 6 (también entiende los nombres anteriores Anual/Semestral/...).
+const PAGOS_ANTERIORES = { Anual: 1, Semestral: 2, Trimestral: 4, Mensual: 12 };
+function numPagos(forma) {
+  if (!forma) return 1;
+  if (PAGOS_ANTERIORES[forma]) return PAGOS_ANTERIORES[forma];
+  const n = parseInt(forma, 10);
+  return n >= 1 && n <= 12 ? n : 1;
+}
+// Meses (0-11) en que cae cada cuota, a partir del mes de inicio: 2 pagos = cada 6 meses, 10 o 12 pagos = mes a mes.
+function mesesDeCuota(p) {
+  const n = numPagos(p.forma_pago), cada = Math.floor(12 / n);
+  const base = Number((p.inicio || p.fin || today()).slice(5, 7)) - 1;
+  return Array.from({ length: n }, (_, k) => (base + k * cada) % 12);
+}
+const textoPago = (p) => [p.forma_pago, p.modalidad_pago].filter(Boolean).join(' · ');
 
 const CAMPOS_PAGO = [
   { k: 'fecha', label: 'Fecha de pago', type: 'date', req: true },
@@ -23,7 +37,7 @@ function resumenPago(total, pagado) {
 function estadoPagoPoliza(p, pagos) {
   const ps = pagosDe('poliza', p.id, pagos).filter((x) => !p.inicio || x.fecha >= p.inicio);
   const r = resumenPago(Number(p.prima || 0), sumaMontos(ps));
-  r.cuota = r.total / (PAGOS_POR_ANIO[p.forma_pago] || 1);
+  r.cuota = r.total / numPagos(p.forma_pago);
   r.pagos = ps;
   return r;
 }
@@ -96,7 +110,7 @@ function fichaPoliza(id) {
     <h2>${asegLogo(p.aseguradora)}</h2>
     <p><b>${esc(c.nombre || '—')}</b> · ${esc(p.ramo)} ${p.numero ? '· Póliza No. ' + esc(p.numero) : ''}</p>
     <div class="grid2 muted">
-      <div>Prima neta: <b>${money(p.prima_neta)}</b><br>Prima total: <b>${money(p.prima)}</b><br>Forma de pago: ${esc(p.forma_pago || '—')}${p.forma_pago && p.forma_pago !== 'Anual' ? ` (cuota ${money(r.cuota)})` : ''}<br>Comisión: ${p.comision_pct ? esc(p.comision_pct) + '% = ' + money(primaBase(p) * p.comision_pct / 100) : '—'}</div>
+      <div>Prima neta: <b>${money(p.prima_neta)}</b><br>Prima total: <b>${money(p.prima)}</b><br>Pago: ${esc(textoPago(p) || '—')}${numPagos(p.forma_pago) > 1 ? ` (cuota ${money(r.cuota)})` : ''}<br>Comisión: ${p.comision_pct ? esc(p.comision_pct) + '% = ' + money(primaBase(p) * p.comision_pct / 100) : '—'}</div>
       <div>Suma asegurada: ${money(p.suma_asegurada)}<br>Vigencia: ${fmtDate(p.inicio)} → ${fmtDate(p.fin)}<br>${p.estado === 'Vigente' ? venceBadge(p.fin) : ''} <span class="badge">${esc(p.estado)}</span></div>
     </div>
     ${p.notas ? `<p>${esc(p.notas)}</p>` : ''}
@@ -139,7 +153,7 @@ function vCobros(el) {
     </div>
     <div class="card table-wrap"><h3>Pendientes de cobro</h3><table><thead><tr><th>Cliente</th><th>${seg ? 'Póliza' : 'Trámite'}</th><th>Total</th><th>Pagado</th><th>Saldo</th><th></th></tr></thead><tbody>
       ${pendientes.map(({ item, r }) => `<tr><td><b>${esc(clienteNombre(item.cliente_id))}</b></td>
-        <td>${seg ? `${asegLogo(item.aseguradora)}<div class="muted">${esc(item.ramo)} · ${esc(item.forma_pago || '')}</div>` : esc(item.tramite)}</td>
+        <td>${seg ? `${asegLogo(item.aseguradora)}<div class="muted">${esc(item.ramo)} · ${esc(textoPago(item))}</div>` : esc(item.tramite)}</td>
         <td>${money(r.total)}</td><td>${money(r.pagado)}</td><td>${pagoBadge(r)}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-cobrar="${item.id}">+ Pago</button> <button class="btn wa sm" data-wa="${item.id}">WhatsApp</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">¡Todo cobrado! 🎉</td></tr>'}
     </tbody></table></div>

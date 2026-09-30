@@ -233,7 +233,8 @@ async function vEstadisticas(el) {
     ${seg ? `<div class="card"><div class="card-top"><h3>Primas por aseguradora</h3>${botonesMetrica('m-aseg', [['mensual', 'Prima mensual'], ['anual', 'Prima anual'], ['polizas', 'Pólizas'], ['comision', 'Comisión']], 'mensual')}</div>
       <p class="muted">Prima mensual = prima total anual ÷ 12 (lo que equivale a cobrar cada mes).</p><div id="g-aseg"></div></div>
     <div class="card"><h3>Primas por cobrar mes a mes (próximos 12 meses)</h3>
-      <p class="muted">Según la forma de pago y la fecha de inicio de cada póliza vigente (Anual = un pago en el mes de inicio; Mensual = cada mes).</p><div id="g-flujo"></div></div>
+      <p class="muted">Según el número de pagos y la fecha de inicio de cada póliza vigente (1 pago = en el mes de inicio; 2 pagos = cada 6 meses; 10 o 12 pagos = mes a mes).</p><div id="g-flujo"></div></div>
+    <div class="card"><h3>¿Cómo pagan tus clientes?</h3><p class="muted">Pólizas vigentes por modalidad de pago.</p><div id="g-modalidad"></div></div>
     <div class="card"><div class="card-top"><h3>Cartera por ramo</h3>${botonesMetrica('m-ramo', [['polizas', 'Pólizas'], ['anual', 'Prima anual']], 'polizas')}</div><div id="g-ramo"></div></div>`
     : `<div class="card"><div class="card-top"><h3>Honorarios por tipo de trámite</h3>${botonesMetrica('m-tram', [['honorarios', 'Honorarios'], ['cantidad', 'Cantidad']], 'honorarios')}</div><div id="g-tram"></div></div>`}
     <div class="card"><h3>Pagos recibidos por mes (últimos 12 meses)</h3><div id="g-cobros"></div></div>
@@ -319,16 +320,22 @@ function pintarSeguros() {
     const porA = {};
     let total = 0;
     vig.forEach((p) => {
-      const n = PAGOS_POR_ANIO[p.forma_pago] || 1;
-      const base = Number((p.inicio || p.fin || today()).slice(5, 7)) - 1;
-      if (((mes - base) % (12 / n) + 12) % (12 / n) !== 0) return;
-      const c = Number(p.prima || 0) / n;
+      const veces = mesesDeCuota(p).filter((m) => m === mes).length;
+      if (!veces) return;
+      const c = (Number(p.prima || 0) / numPagos(p.forma_pago)) * veces;
       total += c; porA[p.aseguradora] = (porA[p.aseguradora] || 0) + c;
     });
     const top = Object.entries(porA).sort((a, b) => b[1] - a[1]).slice(0, 4);
     flujo.push({ etiqueta: MESES[mes], titulo: `${MESES_LARGO[mes]} ${d.getFullYear()}`, valor: total, lineas: [{ valor: money(total), texto: 'por cobrar' }, ...top.map(([a, v]) => ({ valor: money(v), texto: a }))] });
   }
   barrasV($('#g-flujo'), flujo, { fmt: moneyCorto });
+
+  const mods = [...CAT.modalidadesPago, 'Sin indicar'];
+  barrasH($('#g-modalidad'), mods.map((mo) => {
+    const ps = vig.filter((p) => (p.modalidad_pago || 'Sin indicar') === mo);
+    const pa = ps.reduce((s, p) => s + Number(p.prima || 0), 0);
+    return { etiqueta: mo, valor: ps.length, lineas: [{ valor: String(ps.length), texto: ps.length === 1 ? 'póliza' : 'pólizas' }, { valor: money(pa), texto: 'prima anual' }, { valor: vig.length ? Math.round(ps.length / vig.length * 100) + '%' : '0%', texto: 'de las pólizas' }] };
+  }).filter((f) => f.valor > 0).sort((a, b) => b.valor - a.valor));
 
   // Por ramo
   const pintaRamo = (k) => {
