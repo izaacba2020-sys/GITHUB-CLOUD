@@ -228,7 +228,7 @@ function planImport(filas, m, campos, op = {}) {
   const buscar = (c) => [c.dpi && 'd:' + norm(c.dpi), c.nit && 't:' + norm(c.nit), c.nombre && 'n:' + norm(c.nombre)].filter(Boolean).map((k) => idx.get(k)).find(Boolean);
   const polizasExist = new Set(state.data.polizas?.map((p) => norm(p.aseguradora) + '|' + norm(p.numero)).filter((k) => !k.endsWith('|')));
 
-  const plan = { clientes: [], items: [], pagos: [], existentes: 0, sinNombre: 0, dupItems: 0, avisos: [] };
+  const plan = { clientes: [], items: [], pagos: [], completar: {}, existentes: 0, sinNombre: 0, dupItems: 0, avisos: [] };
   filas.forEach((fila, i) => {
     const c = {}, x = {};
     for (const f of campos) {
@@ -244,7 +244,14 @@ function planImport(filas, m, campos, op = {}) {
     if (c.telefono) c.telefono = String(c.telefono).replace(/\.0$/, '');
     if (c.tipo) c.tipo = buscarEn(CAT.tiposPersona, c.tipo, ALIAS_TIPO) || c.tipo;
     let cliente = buscar(c);
-    if (cliente) { if (!cliente._nuevo) plan.existentes++; }
+    if (cliente) {
+      if (!cliente._nuevo) {
+        plan.existentes++;
+        // Completa datos vacíos del cliente existente (teléfono, NIT, cumpleaños…) sin sobrescribir lo que ya tiene.
+        const faltan = Object.fromEntries(Object.entries(c).filter(([k, v]) => k !== 'nombre' && v != null && v !== '' && !cliente[k] && !(plan.completar[cliente.id] || {})[k]));
+        if (Object.keys(faltan).length) plan.completar[cliente.id] = { ...(plan.completar[cliente.id] || {}), ...faltan };
+      }
+    }
     else {
       cliente = { id: crypto.randomUUID(), ...c, _nuevo: true };
       plan.clientes.push(cliente);
@@ -302,7 +309,7 @@ function confirmarImport(plan) {
     <div class="kpis">
       <div class="kpi"><div class="v">${plan.clientes.length}</div><div class="l">Clientes nuevos</div></div>
       <div class="kpi"><div class="v">${plan.items.length}</div><div class="l">${nombreItems} nuevas</div></div>
-      <div class="kpi"><div class="v">${plan.existentes}</div><div class="l">Filas de clientes que ya existían</div></div>
+      <div class="kpi"><div class="v">${plan.existentes}</div><div class="l">Filas de clientes que ya existían${Object.keys(plan.completar).length ? ` (se completan datos de ${Object.keys(plan.completar).length})` : ''}</div></div>
       ${plan.pagos.length ? `<div class="kpi"><div class="v">${plan.pagos.length}</div><div class="l">Pólizas marcadas como pagadas</div></div>` : ''}
     </div>
     ${plan.sinNombre ? `<p class="muted">⚠️ ${plan.sinNombre} filas sin nombre se omitirán.</p>` : ''}
@@ -318,6 +325,10 @@ function confirmarImport(plan) {
     $('#ok').disabled = true; $('#ok').textContent = 'Importando…';
     try {
       await db.insertMany('clientes', plan.clientes.map(({ _nuevo, ...c }) => c));
+      for (const [id, datos] of Object.entries(plan.completar)) {
+        const ex = state.data.clientes.find((x) => x.id === id);
+        if (ex) await db.save('clientes', { ...ex, ...datos }, false);
+      }
       await db.insertMany(seg ? 'polizas' : 'expedientes', plan.items);
       await db.insertMany('pagos', plan.pagos);
       await db.log('importó', 'Excel', `${plan.clientes.length} clientes y ${plan.items.length} ${nombreItems}`);
