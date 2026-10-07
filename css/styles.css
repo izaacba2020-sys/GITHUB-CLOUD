@@ -160,3 +160,31 @@ svg.viz { display: block; width: 100%; height: auto; overflow: visible; }
 .sube { color: #006300; font-size: 12px; }
 .baja { color: #d03b3b; font-size: 12px; }
 @media (max-width: 600px) { .hbar-row { grid-template-columns: 1fr auto; } .hbar-track { grid-column: 1 / -1; order: 3; } }
+
+/* Agenda */
+.agenda-top { margin-bottom: 8px; }
+.ev-leyenda { margin-bottom: 10px; font-size: 12px; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-h { text-align: center; font-size: 12px; color: var(--muted); font-weight: 600; padding: 4px 0; }
+.cal-d { background: var(--card); border-radius: 8px; min-height: 104px; padding: 4px; cursor: pointer; border: 1px solid transparent; min-width: 0; }
+.cal-d:hover { border-color: var(--line); }
+.cal-semana .cal-d { min-height: 320px; }
+.cal-d.fuera { opacity: .45; }
+.cal-d.hoy { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cal-n { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 3px; }
+.cal-d.hoy .cal-n { color: var(--accent); }
+.ev { font-size: 11.5px; line-height: 1.3; padding: 2px 5px; margin-bottom: 2px; border-radius: 4px; background: #f1f2f5; border-left: 3px solid #898781; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.cal-semana .ev { white-space: normal; }
+.ev:hover { filter: brightness(.96); }
+.ev-cita { border-left-color: #2a78d6; } .ev-audiencia { border-left-color: #4a3aa7; }
+.ev-seguimiento { border-left-color: #eb6834; } .ev-limite { border-left-color: #d03b3b; }
+.ev-cumple { border-left-color: #e87ba4; } .ev-tarea { border-left-color: #898781; }
+.badge.ev-cita, .badge.ev-audiencia, .badge.ev-seguimiento, .badge.ev-limite, .badge.ev-cumple, .badge.ev-tarea { border-left-width: 3px; border-left-style: solid; border-radius: 4px; }
+.ev-hecho { opacity: .55; text-decoration: line-through; }
+.ev-mas { font-size: 11px; color: var(--muted); padding: 1px 4px; cursor: pointer; }
+.ev-fila .click { cursor: pointer; }
+@media (max-width: 800px) { .cal-d { min-height: 64px; } .ev { font-size: 10px; padding: 1px 3px; } .cal-semana .cal-d { min-height: 120px; } }
+
+/* Expedientes y prospectos */
+.exp-pie { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 6px; font-size: 13px; }
+.kbtn { margin-top: 6px; width: 100%; }

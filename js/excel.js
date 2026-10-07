@@ -294,7 +294,7 @@ function planImport(filas, m, campos, op = {}) {
       if (!x.tramite) return;
       if (!t) { x.descripcion = [x.tramite, x.descripcion].filter(Boolean).join(' · '); x.tramite = 'Otro'; } else x.tramite = t;
       x.estado = (x.estado && buscarEn(CAT.estadosExpediente, x.estado)) || CAT.estadosExpediente[0];
-      x.checklist = (CAT.checklists[x.tramite] || []).map((q) => ({ t: q, ok: false }));
+      x.checklist = checklistDe(x.tramite).map((q) => ({ t: q, ok: false }));
     }
     plan.items.push(x);
   });
@@ -354,10 +354,12 @@ async function descargarPlantillaImport() {
 async function exportarTodo() {
   await cargarXLSX();
   toast('Preparando respaldo…');
-  const tablas = ['clientes', 'prospectos', 'expedientes', 'polizas', 'pagos', 'tareas', 'plantillas', 'actividad'];
+  const tablas = ['clientes', 'prospectos', 'expedientes', 'polizas', 'pagos', 'tareas', 'plantillas', 'actividad', 'bitacora'];
   const d = {};
   try {
-    for (const t of tablas) d[t] = (await db.listAll(t)) || [];
+    for (const t of tablas) {
+      try { d[t] = (await db.listAll(t)) || []; } catch (e) { if (t === 'bitacora') d[t] = []; else throw e; }
+    }
   } catch { return; }
   const cli = new Map(d.clientes.map((c) => [c.id, c.nombre]));
   const perfil = (p) => (p === 'byc' ? 'B&C' : p === 'seguros' ? 'Seguros' : p || '');
@@ -366,10 +368,11 @@ async function exportarTodo() {
   const hojas = {
     Clientes: d.clientes.map((c) => ({ Perfil: perfil(c.perfil), Nombre: c.nombre, 'Tipo de persona': c.tipo, DPI: c.dpi, NIT: c.nit, 'Teléfono': c.telefono, Correo: c.email, 'Dirección': c.direccion, 'Fecha de nacimiento': c.fecha_nacimiento, Fuente: c.fuente, Etiquetas: c.etiquetas, Notas: c.notas, 'Creado por': c.created_by, 'Creado el': fh(c.created_at) })),
     'Pólizas': d.polizas.map((p) => { const r = estadoPagoPoliza(p, d.pagos); return { Cliente: cn(p.cliente_id), Aseguradora: p.aseguradora, Ramo: p.ramo, 'No. póliza': p.numero, 'Suma asegurada': p.suma_asegurada, 'Prima neta': p.prima_neta, 'Prima total': p.prima, 'Número de pagos': p.forma_pago, 'Modalidad de pago': p.modalidad_pago, 'Comisión %': p.comision_pct, 'Comisión Q': p.comision_pct ? Math.round(primaBase(p) * p.comision_pct) / 100 : null, 'Inicio de vigencia': p.inicio, 'Fin de vigencia': p.fin, Estado: p.estado, 'Pagado (vigencia)': r.pagado, Saldo: r.saldo, 'Estado de pago': r.estado, Notas: p.notas, 'Creado por': p.created_by }; }),
-    Expedientes: d.expedientes.map((x) => { const r = estadoPagoExp(x, d.pagos); return { Cliente: cn(x.cliente_id), 'Trámite': x.tramite, 'Descripción': x.descripcion, Estado: x.estado, Responsable: x.responsable, Inicio: x.fecha_inicio, 'Fecha límite': x.fecha_limite, Honorarios: x.honorarios, Anticipo: x.anticipo, 'Total pagado': r.pagado, Saldo: r.saldo, 'Requisitos completos': (x.checklist || []).filter((i) => i.ok).map((i) => i.t).join(', '), 'Requisitos pendientes': (x.checklist || []).filter((i) => !i.ok).map((i) => i.t).join(', '), Notas: x.notas, 'Creado por': x.created_by }; }),
+    Expedientes: d.expedientes.map((x) => { const r = estadoPagoExp(x, d.pagos); return { Cliente: cn(x.cliente_id), 'Trámite': x.tramite, 'Descripción': x.descripcion, Estado: x.estado, Responsable: x.responsable, 'No. de proceso': x.numero_causa, 'Juzgado / institución': x.juzgado, 'Parte contraria': x.contraparte, Inicio: x.fecha_inicio, 'Fecha límite': x.fecha_limite, Honorarios: x.honorarios, Anticipo: x.anticipo, 'Total pagado': r.pagado, Saldo: r.saldo, 'Requisitos completos': (x.checklist || []).filter((i) => i.ok).map((i) => i.t).join(', '), 'Requisitos pendientes': (x.checklist || []).filter((i) => !i.ok).map((i) => i.t).join(', '), Notas: x.notas, 'Creado por': x.created_by }; }),
     Pagos: d.pagos.map((pg) => { const ref = pg.ref_tipo === 'poliza' ? d.polizas.find((p) => p.id === pg.ref_id) : d.expedientes.find((x) => x.id === pg.ref_id); return { Perfil: perfil(pg.perfil), Fecha: pg.fecha, Cliente: cn(pg.cliente_id), Concepto: !ref ? '' : pg.ref_tipo === 'poliza' ? `Póliza ${ref.ramo} ${ref.aseguradora} ${ref.numero || ''}`.trim() : `Trámite ${ref.tramite}`, Monto: pg.monto, 'Método': pg.metodo, Referencia: pg.referencia, Notas: pg.notas, 'Registrado por': pg.created_by }; }),
-    Prospectos: d.prospectos.map((p) => ({ Perfil: perfil(p.perfil), Oportunidad: p.titulo, Cliente: cn(p.cliente_id), Contacto: p.contacto, 'Teléfono': p.telefono, Servicio: p.servicio, Etapa: p.etapa, Monto: p.monto, Seguimiento: p.seguimiento, Notas: p.notas, 'Creado por': p.created_by, 'Creado el': fh(p.created_at) })),
+    Prospectos: d.prospectos.map((p) => ({ Perfil: perfil(p.perfil), Oportunidad: p.titulo, Cliente: cn(p.cliente_id), Contacto: p.contacto, 'Teléfono': p.telefono, Servicio: p.servicio, Etapa: p.etapa, 'Motivo de pérdida': p.motivo_perdida, Monto: p.monto, Seguimiento: p.seguimiento, Notas: p.notas, 'Creado por': p.created_by, 'Creado el': fh(p.created_at) })),
     Agenda: d.tareas.map((t) => ({ Perfil: perfil(t.perfil), Tarea: t.titulo, Tipo: t.tipo, Fecha: fh(t.fecha), Cliente: cn(t.cliente_id), Hecha: t.hecho ? 'Sí' : 'No', Notas: t.notas })),
+    'Bitácora': d.bitacora.map((b) => { const x = d.expedientes.find((e) => e.id === b.expediente_id); return { Fecha: b.fecha, Cliente: cn(b.cliente_id), 'Trámite': x?.tramite, Anotación: b.texto, Por: b.created_by }; }),
     Plantillas: d.plantillas.map((p) => ({ Perfil: perfil(p.perfil), Nombre: p.nombre, Mensaje: p.texto })),
     Actividad: d.actividad.map((a) => ({ Fecha: fh(a.created_at), Usuario: a.usuario, Perfil: perfil(a.perfil), 'Acción': a.accion, Tipo: a.entidad, 'Descripción': a.descripcion })),
   };

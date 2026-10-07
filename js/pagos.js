@@ -104,11 +104,12 @@ async function pagarSaldo(tipo, item) {
 function listaPagos(ps) {
   return ps.length ? ps.sort((a, b) => (a.fecha < b.fecha ? 1 : -1)).map((pg) => `<div class="list-item click" data-pago="${pg.id}">
     <div><b>${money(pg.monto)}</b> ${pg.metodo ? `<span class="badge">${esc(pg.metodo)}</span>` : ''}<div class="muted">${fmtDate(pg.fecha)}${pg.referencia ? ' · Ref. ' + esc(pg.referencia) : ''}</div></div>
-    <span class="muted">Editar</span></div>`).join('') : '<div class="empty">Sin pagos registrados</div>';
+    <span style="display:flex;gap:6px;align-items:center">${state.perfil === 'byc' ? `<button class="btn sec sm" data-recibo="${pg.id}">🧾 Recibo</button>` : ''}<span class="muted">Editar</span></span></div>`).join('') : '<div class="empty">Sin pagos registrados</div>';
 }
 
 function bindPagos(root) {
   root.querySelectorAll('[data-pago]').forEach((el) => (el.onclick = () => editarPago(state.data.pagos.find((x) => x.id === el.dataset.pago))));
+  root.querySelectorAll('[data-recibo]').forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); generarReciboPDF(state.data.pagos.find((x) => x.id === b.dataset.recibo)); }));
 }
 
 function fichaPoliza(id) {
@@ -166,7 +167,7 @@ function vCobros(el) {
         <td>${money(r.total)}</td><td>${money(r.pagado)}</td><td>${pagoBadge(r)}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-cobrar="${item.id}">+ Pago</button> <button class="btn wa sm" data-wa="${item.id}">WhatsApp</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">¡Todo cobrado! 🎉</td></tr>'}
     </tbody></table></div>
-    <div class="card"><h3>Últimos pagos recibidos</h3>${recientes.map((pg) => `<div class="list-item click" data-pago="${pg.id}"><div><b>${money(pg.monto)}</b> · ${esc(clienteNombre(pg.cliente_id))}<div class="muted">${fmtDate(pg.fecha)} ${pg.metodo ? '· ' + esc(pg.metodo) : ''} ${pg.referencia ? '· Ref. ' + esc(pg.referencia) : ''}</div></div><span class="muted">Editar</span></div>`).join('') || '<div class="empty">Aún no hay pagos</div>'}</div>`;
+    <div class="card"><h3>Últimos pagos recibidos</h3>${recientes.map((pg) => `<div class="list-item click" data-pago="${pg.id}"><div><b>${money(pg.monto)}</b> · ${esc(clienteNombre(pg.cliente_id))}<div class="muted">${fmtDate(pg.fecha)} ${pg.metodo ? '· ' + esc(pg.metodo) : ''} ${pg.referencia ? '· Ref. ' + esc(pg.referencia) : ''}</div></div><span style="display:flex;gap:6px;align-items:center">${state.perfil === 'byc' ? `<button class="btn sec sm" data-recibo="${pg.id}">🧾 Recibo</button>` : ''}<span class="muted">Editar</span></span></div>`).join('') || '<div class="empty">Aún no hay pagos</div>'}</div>`;
   const lista = seg ? state.data.polizas : state.data.expedientes;
   el.querySelectorAll('[data-cobrar]').forEach((b) => (b.onclick = () => registrarPago(tipo, lista.find((x) => x.id === b.dataset.cobrar))));
   el.querySelectorAll('[data-wa]').forEach((b) => (b.onclick = () => {

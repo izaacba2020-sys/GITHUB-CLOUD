@@ -41,7 +41,7 @@ function asegLogo(nombre) {
 }
 
 // ---------- Capa de datos (Supabase o modo demo en el navegador) ----------
-const ENTIDAD = { clientes: 'cliente', prospectos: 'prospecto', expedientes: 'expediente', polizas: 'póliza', tareas: 'tarea', pagos: 'pago', plantillas: 'plantilla' };
+const ENTIDAD = { clientes: 'cliente', prospectos: 'prospecto', expedientes: 'expediente', polizas: 'póliza', tareas: 'tarea', pagos: 'pago', plantillas: 'plantilla', bitacora: 'anotación' };
 
 function dbError(error) {
   const falta = error.code === 'PGRST205' || error.code === 'PGRST204' || error.code === '42P01' || /could not find|does not exist/i.test(error.message);
@@ -99,7 +99,7 @@ const db = {
 
   async save(t, row, desc) {
     const nuevo = !row.id;
-    const payload = { ...row, perfil: state.perfil };
+    const payload = { ...row, perfil: row.perfil || state.perfil };
     for (const k in payload) if (payload[k] === '') payload[k] = null;
     delete payload.created_at;
     if (nuevo) payload.created_by = state.user.email;
@@ -137,9 +137,10 @@ const db = {
 };
 
 async function loadAll() {
-  const tablas = ['clientes', 'prospectos', 'tareas', 'actividad', 'pagos', 'plantillas', 'polizas', 'expedientes'];
+  const tablas = ['clientes', 'prospectos', 'tareas', 'actividad', 'pagos', 'plantillas', 'polizas', 'expedientes', 'bitacora', 'config'];
   const res = await Promise.all(tablas.map((t) => db.list(t)));
   tablas.forEach((t, i) => (state.data[t] = res[i] || []));
+  state.config = Object.fromEntries(state.data.config.map((r) => [r.clave, r.valor]));
   // La primera vez se guardan las plantillas de WhatsApp sugeridas para poder editarlas.
   const iPl = tablas.indexOf('plantillas');
   if (res[iPl] && !res[iPl].length) {
@@ -155,6 +156,8 @@ function openModal(html) { $('#modal-box').innerHTML = html; $('#modal').classLi
 function closeModal() { $('#modal').classList.add('hidden'); }
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
 
+const ph = (f) => (f.ph ? `placeholder="${esc(typeof f.ph === 'function' ? f.ph() : f.ph)}"` : '');
+
 function field(f, val) {
   const v = val ?? f.def ?? '';
   const req = f.req ? 'required' : '';
@@ -163,11 +166,11 @@ function field(f, val) {
     const opts = (typeof f.options === 'function' ? f.options() : f.options).map((o) => (typeof o === 'string' ? { v: o, l: o } : o));
     input = `<select name="${f.k}" ${req}><option value="">— Seleccionar —</option>${opts.map((o) => `<option value="${esc(o.v)}" ${String(o.v) === String(v) ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select>`;
   } else if (f.type === 'textarea') {
-    input = `<textarea name="${f.k}">${esc(v)}</textarea>`;
+    input = `<textarea name="${f.k}" ${ph(f)}>${esc(v)}</textarea>`;
   } else {
     let value = v;
     if (f.type === 'datetime-local' && v) { const d = new Date(v); value = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
-    input = `<input type="${f.type || 'text'}" name="${f.k}" value="${esc(value)}" ${req} ${f.type === 'number' ? 'step="0.01"' : ''}>`;
+    input = `<input type="${f.type || 'text'}" name="${f.k}" value="${esc(value)}" ${req} ${ph(f)} ${f.type === 'number' ? 'step="0.01"' : ''}>`;
   }
   return `<div class="${f.full ? 'full' : ''}"><label>${esc(f.label)}${f.req ? ' *' : ''}</label>${input}</div>`;
 }
@@ -215,7 +218,7 @@ const CAMPOS = {
     { k: 'notas', label: 'Notas', type: 'textarea', full: true },
   ],
   prospectos: [
-    { k: 'titulo', label: 'Oportunidad', req: true, full: true },
+    { k: 'titulo', label: '¿Qué necesita?', req: true, full: true, ph: () => (state.perfil === 'byc' ? 'Ej.: Compraventa de terreno en Mixco' : 'Ej.: Seguro para su Toyota Hilux 2022') },
     { k: 'cliente_id', label: 'Cliente existente', type: 'select', options: clienteOpts },
     { k: 'contacto', label: 'O nombre del prospecto' },
     { k: 'telefono', label: 'Teléfono', type: 'tel' },
@@ -231,6 +234,9 @@ const CAMPOS = {
     { k: 'descripcion', label: 'Descripción', full: true },
     { k: 'estado', label: 'Estado', type: 'select', options: CAT.estadosExpediente, def: CAT.estadosExpediente[0] },
     { k: 'responsable', label: 'Responsable' },
+    { k: 'numero_causa', label: 'No. de proceso / causa / expediente', ph: 'Ej.: 01069-2026-00123' },
+    { k: 'juzgado', label: 'Juzgado / fiscalía / institución', ph: 'Ej.: Juzgado 3.º de Paz Penal' },
+    { k: 'contraparte', label: 'Parte contraria' },
     { k: 'fecha_inicio', label: 'Fecha de inicio', type: 'date', def: today() },
     { k: 'fecha_limite', label: 'Fecha límite', type: 'date' },
     { k: 'honorarios', label: 'Honorarios (Q)', type: 'number' },
@@ -254,10 +260,11 @@ const CAMPOS = {
     { k: 'notas', label: 'Notas', type: 'textarea', full: true },
   ],
   tareas: [
-    { k: 'titulo', label: 'Tarea', req: true, full: true },
+    { k: 'titulo', label: 'Descripción', req: true, full: true, ph: 'Ej.: Audiencia de primera declaración / Cita para firma' },
     { k: 'tipo', label: 'Tipo', type: 'select', options: CAT.tiposTarea },
     { k: 'fecha', label: 'Fecha y hora', type: 'datetime-local', req: true },
-    { k: 'cliente_id', label: 'Cliente', type: 'select', options: clienteOpts, full: true },
+    { k: 'cliente_id', label: 'Cliente', type: 'select', options: clienteOpts },
+    { k: 'expediente_id', label: 'Expediente relacionado', type: 'select', perfil: 'byc', options: () => state.data.expedientes.filter((x) => !['Entregado', 'Cancelado'].includes(x.estado) || x.id === state.editando?.expediente_id).map((x) => ({ v: x.id, l: `${x.tramite} · ${clienteNombre(x.cliente_id)}` })) },
     { k: 'notas', label: 'Notas', type: 'textarea', full: true },
   ],
 };
@@ -280,11 +287,13 @@ function editar(t, row = {}, extra = {}) {
   state.editando = data;
   formModal({
     titulo: (row.id ? 'Editar ' : 'Nuevo ') + TITULOS[t].toLowerCase(),
-    campos: CAMPOS[t],
+    campos: CAMPOS[t].filter((f) => !f.perfil || f.perfil === state.perfil),
     data,
     onSave: async (out) => {
-      if (t === 'expedientes' && !row.id) out.checklist = (CAT.checklists[out.tramite] || []).map((x) => ({ t: x, ok: false }));
+      if (t === 'expedientes' && !row.id) out.checklist = checklistDe(out.tramite).map((x) => ({ t: x, ok: false }));
+      if (t === 'tareas' && out.expediente_id && !out.cliente_id) out.cliente_id = state.data.expedientes.find((x) => x.id === out.expediente_id)?.cliente_id || '';
       await db.save(t, out, descOf(t, out));
+      if (t === 'expedientes' && !row.id) await ofrecerVentaCruzada(out);
     },
     onDelete: row.id ? async () => {
       if (t === 'clientes' && !confirm('⚠️ Al eliminar el cliente también se borran TODAS sus pólizas/expedientes, pagos y tareas.\n\nSi solo dejó de renovar, mejor marca la póliza como "No renovada".\n\n¿Eliminar de todas formas?')) throw new Error('cancelado');
@@ -324,6 +333,7 @@ const VISTAS = {
   agenda: { nombre: 'Agenda', fn: vAgenda },
   plantillas: { nombre: 'WhatsApp', fn: vPlantillas },
   actividad: { nombre: 'Actividad', fn: vActividad },
+  configuracion: { nombre: 'Configuración', fn: vConfiguracion },
 };
 
 function tareasPendientes() {
@@ -336,7 +346,7 @@ function tareaItem(t) {
   return `<div class="list-item">
     <div><input type="checkbox" style="width:auto" data-hecho="${t.id}" ${t.hecho ? 'checked' : ''}>
       <b>${esc(t.titulo)}</b> ${t.tipo ? `<span class="badge">${esc(t.tipo)}</span>` : ''}
-      <div class="muted">${fmtDateTime(t.fecha)} ${t.cliente_id ? '· ' + esc(clienteNombre(t.cliente_id)) : ''}</div></div>
+      <div class="muted">${fmtDateTime(t.fecha)} ${t.cliente_id ? '· ' + esc(clienteNombre(t.cliente_id)) : ''}${t.expediente_id ? ' · ' + esc(state.data.expedientes.find((x) => x.id === t.expediente_id)?.tramite || '') : ''}</div></div>
     ${vencida && !t.hecho ? '<span class="badge bad">Atrasada</span>' : ''}
   </div>`;
 }
@@ -358,7 +368,7 @@ function vDashboard(el) {
     ['Clientes', d.clientes.length],
     ['Prospectos abiertos', abiertos.length],
     ['Ganados este mes', ganadosMes],
-    ['Pendientes hoy', tareasPendientes().length],
+    ['Pendientes hoy', tareasPendientes().length + prospectosPorSeguir().length],
   ];
   let extra = '';
   if (state.perfil === 'byc') {
@@ -379,7 +389,8 @@ function vDashboard(el) {
   el.innerHTML = `
     <div class="kpis">${kpis.map(([l, v]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>
     <div class="grid2">
-      <div class="card"><h3>Pendientes de hoy y atrasados</h3><div id="pend">${tareasPendientes().map(tareaItem).join('') || '<div class="empty">¡Todo al día! 🎉</div>'}</div></div>
+      <div class="card"><h3>Pendientes de hoy y atrasados</h3><div id="pend">${tareasPendientes().map(tareaItem).join('') + prospectosPorSeguir().map(seguimientoItem).join('') || '<div class="empty">¡Todo al día! 🎉</div>'}</div>
+        ${(() => { const n = d.prospectos.filter((p) => !['Ganado', 'Perdido'].includes(p.etapa) && !p.seguimiento).length; return n ? `<p class="muted" style="margin-bottom:0">⚠️ ${n} prospecto${n > 1 ? 's' : ''} sin fecha de seguimiento · <a href="#prospectos">revisar</a></p>` : ''; })()}</div>
       ${extra}
       ${tarjetaCumpleanos()}
       <div class="card"><h3>Embudo de prospectos</h3>${etapas}</div>
@@ -387,6 +398,7 @@ function vDashboard(el) {
     </div>`;
   bindTareas(el);
   bindCumpleanos(el);
+  bindSeguimientos(el);
 }
 
 function venceBadge(fecha) {
@@ -508,7 +520,9 @@ function vProspectos(el) {
           <b>${esc(p.titulo)}</b>
           <div class="muted">${esc(p.cliente_id ? clienteNombre(p.cliente_id) : p.contacto || '')} ${p.servicio ? '· ' + esc(p.servicio) : ''}</div>
           ${p.monto ? `<div>${money(p.monto)}</div>` : ''}
-          ${p.seguimiento ? `<div class="muted">Seguimiento: ${venceBadge(p.seguimiento)}</div>` : ''}
+          ${p.seguimiento && !['Ganado', 'Perdido'].includes(e) ? `<div class="muted">Seguimiento: ${venceBadge(p.seguimiento)}</div>` : ''}
+          ${e === 'Perdido' && p.motivo_perdida ? `<div class="muted">Motivo: ${esc(p.motivo_perdida)}</div>` : ''}
+          ${state.perfil === 'byc' && !['Ganado', 'Perdido'].includes(e) ? `<button class="btn sec sm kbtn" data-cot="${p.id}">📄 Cotización</button>` : ''}
           <select data-etapa-sel="${p.id}">${CAT.etapas.map((x) => `<option ${x === e ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
         </div>`).join('')}</div>`;
     }).join('')}</div>`;
@@ -516,17 +530,17 @@ function vProspectos(el) {
   const mover = async (id, etapa) => {
     const p = state.data.prospectos.find((x) => x.id === id);
     if (!p || p.etapa === etapa) return;
+    if (etapa === 'Ganado') return ganarProspecto(p);
+    if (etapa === 'Perdido') return perderProspecto(p);
     await db.save('prospectos', { ...p, etapa }, `${p.titulo} → ${etapa}`);
-    if (etapa === 'Ganado' && !p.cliente_id && confirm('¡Ganado! ¿Registrar a este prospecto como cliente?')) {
-      editar('clientes', {}, { nombre: p.contacto || p.titulo, telefono: p.telefono });
-    }
     render();
   };
   el.querySelectorAll('.kcard').forEach((k) => {
     k.ondragstart = (e) => e.dataTransfer.setData('id', k.dataset.id);
-    k.onclick = (e) => { if (e.target.tagName !== 'SELECT') editar('prospectos', state.data.prospectos.find((x) => x.id === k.dataset.id)); };
+    k.onclick = (e) => { if (e.target.tagName !== 'SELECT' && !e.target.dataset.cot) editar('prospectos', state.data.prospectos.find((x) => x.id === k.dataset.id)); };
   });
   el.querySelectorAll('[data-etapa-sel]').forEach((s) => (s.onchange = () => mover(s.dataset.etapaSel, s.value)));
+  el.querySelectorAll('[data-cot]').forEach((b) => (b.onclick = () => abrirCotizacion({ prospecto: state.data.prospectos.find((x) => x.id === b.dataset.cot) })));
   el.querySelectorAll('.col').forEach((c) => {
     c.ondragover = (e) => { e.preventDefault(); c.classList.add('over'); };
     c.ondragleave = () => c.classList.remove('over');
@@ -546,19 +560,31 @@ function vExpedientes(el) {
       const cl = x.checklist || [];
       const pct = cl.length ? Math.round(cl.filter((i) => i.ok).length / cl.length * 100) : 0;
       const r = estadoPagoExp(x);
+      const prox = state.data.tareas.filter((t) => t.expediente_id === x.id && !t.hecho && t.fecha >= new Date(today() + 'T00:00').toISOString()).sort((a, b) => (a.fecha > b.fecha ? 1 : -1))[0];
+      const bit = bitacoraDe(x.id);
+      const proceso = [x.numero_causa && `Proceso ${esc(x.numero_causa)}`, x.juzgado && esc(x.juzgado), x.contraparte && `vs. ${esc(x.contraparte)}`].filter(Boolean).join(' · ');
       return `<div class="card">
-        <div class="top" style="margin-bottom:8px"><div><b>${esc(x.tramite)}</b> · ${esc(clienteNombre(x.cliente_id))}<div class="muted">${esc(x.descripcion)}</div></div>
-          <div style="display:flex;gap:6px;align-items:center"><span class="badge">${esc(x.estado)}</span>${x.fecha_limite && !['Entregado', 'Cancelado'].includes(x.estado) ? venceBadge(x.fecha_limite) : ''}<button class="btn wa sm" data-wa="${x.id}">WhatsApp</button><button class="btn sec sm" data-ed="${x.id}">Editar</button></div></div>
+        <div class="top" style="margin-bottom:8px"><div><b>${esc(x.tramite)}</b> · ${esc(clienteNombre(x.cliente_id))}<div class="muted">${esc(x.descripcion)}</div>${proceso ? `<div class="muted">⚖️ ${proceso}</div>` : ''}</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="badge">${esc(x.estado)}</span>${x.fecha_limite && !['Entregado', 'Cancelado'].includes(x.estado) ? venceBadge(x.fecha_limite) : ''}<button class="btn wa sm" data-wa="${x.id}">WhatsApp</button><button class="btn sec sm" data-ed="${x.id}">Editar</button></div></div>
         <div class="grid2"><div class="checklist">${cl.map((i, n) => `<label><input type="checkbox" data-chk="${x.id}" data-n="${n}" ${i.ok ? 'checked' : ''}>${esc(i.t)}</label>`).join('')}
-          <div class="progress"><div style="width:${pct}%"></div></div><div class="muted">${pct}% completado</div></div>
+          <div class="progress"><div style="width:${pct}%"></div></div><div class="muted">${pct}% completado · <a href="#" data-req="${x.id}">✎ editar requisitos</a></div></div>
           <div><div class="muted">Responsable: ${esc(x.responsable || '—')} · Inicio: ${fmtDate(x.fecha_inicio)}</div>
             <div style="margin:8px 0 4px"><b>Honorarios</b> ${pagoBadge(r)}</div>${pagoBarra(r)}
-            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-pagar="${x.id}">+ Registrar pago</button>${r.pagos.length ? `<button class="btn sec sm" data-verpagos="${x.id}">Ver pagos (${r.pagos.length})</button>` : ''}</div></div></div>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-pagar="${x.id}">+ Registrar pago</button>${r.pagos.length ? `<button class="btn sec sm" data-verpagos="${x.id}">Ver pagos (${r.pagos.length})</button>` : ''}<button class="btn sec sm" data-cotexp="${x.id}">📄 Cotización</button></div></div></div>
+        <div class="exp-pie">
+          <div>${prox ? `📅 <b>Próximo:</b> ${esc(prox.tipo || 'Cita')} · ${fmtDateTime(prox.fecha)} — ${esc(prox.titulo)}` : '<span class="muted">Sin audiencias ni citas próximas</span>'}</div>
+          <div>${bit[0] ? `📝 <b>${fmtDate(bit[0].fecha)}:</b> ${esc(bit[0].texto.slice(0, 120))}${bit[0].texto.length > 120 ? '…' : ''}` : '<span class="muted">Sin anotaciones en la bitácora</span>'}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sec sm" data-aud="${x.id}">+ Audiencia / cita / plazo</button><button class="btn sec sm" data-bit="${x.id}">📝 Bitácora (${bit.length})</button></div>
+        </div>
       </div>`;
     }).join('') || '<div class="card empty">Sin expedientes</div>';
     const exp = (id) => state.data.expedientes.find((x) => x.id === id);
     el.querySelectorAll('[data-ed]').forEach((b) => (b.onclick = () => editar('expedientes', exp(b.dataset.ed))));
     el.querySelectorAll('[data-pagar]').forEach((b) => (b.onclick = () => registrarPago('expediente', exp(b.dataset.pagar))));
+    el.querySelectorAll('[data-req]').forEach((b) => (b.onclick = (ev) => { ev.preventDefault(); editarRequisitos(exp(b.dataset.req)); }));
+    el.querySelectorAll('[data-bit]').forEach((b) => (b.onclick = () => abrirBitacora(exp(b.dataset.bit))));
+    el.querySelectorAll('[data-cotexp]').forEach((b) => (b.onclick = () => abrirCotizacion({ expediente: exp(b.dataset.cotexp) })));
+    el.querySelectorAll('[data-aud]').forEach((b) => (b.onclick = () => { const x = exp(b.dataset.aud); editar('tareas', {}, { tipo: 'Audiencia', expediente_id: x.id, cliente_id: x.cliente_id }); }));
     el.querySelectorAll('[data-wa]').forEach((b) => (b.onclick = () => { const x = exp(b.dataset.wa); abrirWhatsApp({ cliente: state.data.clientes.find((c) => c.id === x.cliente_id), expediente: x }); }));
     el.querySelectorAll('[data-verpagos]').forEach((b) => (b.onclick = () => {
       const x = exp(b.dataset.verpagos), r = estadoPagoExp(x);
@@ -647,16 +673,6 @@ function vRenovaciones(el) {
   const rows = state.data.polizas.filter((p) => p.estado === 'Vigente' && daysUntil(p.fin) !== null && daysUntil(p.fin) <= 90).sort((a, b) => (a.fin > b.fin ? 1 : -1));
   el.innerHTML = `<p class="muted">Pólizas vigentes que vencen en los próximos 90 días (o ya vencidas sin actualizar). Al renovar, edita la póliza y cambia la fecha de fin de vigencia.</p>${tablaPolizas(rows)}`;
   bindPolizas(el);
-}
-
-function vAgenda(el) {
-  const ts = [...state.data.tareas].sort((a, b) => (a.fecha > b.fecha ? 1 : -1));
-  const pend = ts.filter((t) => !t.hecho), hechas = ts.filter((t) => t.hecho).reverse().slice(0, 20);
-  el.innerHTML = `<div class="top"><span></span><button class="btn" id="nuevo">+ Nueva tarea / cita</button></div>
-    <div class="grid2"><div class="card"><h3>Pendientes (${pend.length})</h3>${pend.map(tareaItem).join('') || '<div class="empty">Nada pendiente</div>'}</div>
-    <div class="card"><h3>Completadas recientes</h3>${hechas.map(tareaItem).join('') || '<div class="empty">—</div>'}</div></div>`;
-  $('#nuevo').onclick = () => editar('tareas');
-  bindTareas(el);
 }
 
 function actItem(a) {

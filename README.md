@@ -28,12 +28,16 @@ En este modo los datos se guardan solo en ese navegador.
 Si tu base de datos se creó antes de una actualización, corre en **SQL Editor** el archivo correspondiente (se puede correr más de una vez sin problema):
 - `supabase/actualizacion-1.sql`: cumpleaños, prima neta, pagos y plantillas de WhatsApp.
 - `supabase/actualizacion-2.sql`: fotos mensuales de la cartera para la evolución año con año (Estadísticas) y modalidad de pago de las pólizas.
+- `supabase/actualizacion-3.sql`: agenda y mejoras de B&C (motivo de pérdida, datos del proceso, audiencias por expediente, bitácora y configuración).
 
 ## Funciones
 - **Importar Excel** (Clientes → ⬆ Importar Excel): relaciona tus columnas, revisa y confirma. No duplica clientes (mismo nombre, DPI o NIT) ni pólizas (mismo número y aseguradora).
 - **Descargar todo en Excel** (menú lateral): respaldo completo de ambos perfiles, una hoja por tabla.
 - **Pagos y cobros**: registra pagos parciales o completos por póliza o expediente; la sección *Cobros* muestra saldos pendientes.
 - **Estadísticas**: vencimientos por mes, primas por aseguradora y ramo, primas por cobrar en los próximos 12 meses, pagos recibidos y evolución de la cartera con comparativo año con año.
+- **Agenda**: calendario por mes, semana o lista con citas, audiencias, seguimientos de prospectos, fechas límite, vencimientos y cumpleaños.
+- **B&C**: cotización de honorarios y recibos de pago en PDF (se generan en el navegador, no se guardan archivos), prospecto ganado → cliente + expediente, motivo de pérdida, datos del proceso, audiencias, bitácora, requisitos editables y venta cruzada hacia Seguros.
+- **Configuración**: datos que salen en los PDF, textos de la cotización y requisitos por trámite.
 - **WhatsApp**: plantillas editables con variables como `{nombre}`, `{vence}` o `{monto}`, y cumpleaños próximos en *Inicio*.
 
 ## Personalizar

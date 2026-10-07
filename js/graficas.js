@@ -238,11 +238,13 @@ async function vEstadisticas(el) {
     <div class="card"><div class="card-top"><h3>Cartera por ramo</h3>${botonesMetrica('m-ramo', [['polizas', 'Pólizas'], ['anual', 'Prima anual']], 'polizas')}</div><div id="g-ramo"></div></div>`
     : `<div class="card"><div class="card-top"><h3>Honorarios por tipo de trámite</h3>${botonesMetrica('m-tram', [['honorarios', 'Honorarios'], ['cantidad', 'Cantidad']], 'honorarios')}</div><div id="g-tram"></div></div>`}
     <div class="card"><h3>Pagos recibidos por mes (últimos 12 meses)</h3><div id="g-cobros"></div></div>
+    <div class="card"><h3>🎯 Prospectos</h3><div class="kpis" id="st-prosp"></div>
+      <div class="grid2"><div><h4>¿Por qué se pierden?</h4><div id="g-perdidos"></div></div><div><h4>¿Qué piden más?</h4><div id="g-servicios"></div></div></div></div>
     <div class="card"><div class="card-top"><h3>📈 Evolución de la cartera</h3><div id="evo-seg"></div></div>
       <p class="muted">El CRM guarda automáticamente una "foto" de la cartera cada mes. Esta gráfica se va llenando con el tiempo y te permite comparar año con año.</p>
       <div id="g-evo"></div><div id="t-anios"></div></div>`;
 
-  const redibujar = () => (seg ? pintarSeguros() : pintarByc());
+  const redibujar = () => { (seg ? pintarSeguros() : pintarByc()); pintarProspectos(); };
   if (seg) { $('#f-aseg').onchange = redibujar; $('#f-ramo').onchange = redibujar; }
   else $('#f-anio').onchange = redibujar;
   state.fotos = undefined;
@@ -380,6 +382,25 @@ function pintarByc() {
   bindSeg('m-tram', pintaTram);
   pintaTram($('#m-tram .on').dataset.k);
   barrasV($('#g-cobros'), pagosUltimos12(), { fmt: moneyCorto });
+}
+
+function pintarProspectos() {
+  const ps = state.data.prospectos;
+  const gan = ps.filter((p) => p.etapa === 'Ganado'), per = ps.filter((p) => p.etapa === 'Perdido');
+  const abiertos = ps.filter((p) => !['Ganado', 'Perdido'].includes(p.etapa));
+  const tasa = gan.length + per.length ? Math.round(gan.length / (gan.length + per.length) * 100) + '%' : '—';
+  $('#st-prosp').innerHTML = kpisHTML([
+    ['Tasa de cierre', tasa, 'ganados ÷ (ganados + perdidos)'],
+    ['Ganados', gan.length, money(gan.reduce((s, p) => s + Number(p.monto || 0), 0))],
+    ['Perdidos', per.length],
+    ['En negociación', abiertos.length, money(abiertos.reduce((s, p) => s + Number(p.monto || 0), 0))],
+  ]);
+  const motivos = {};
+  per.forEach((p) => { const m = p.motivo_perdida || 'Sin indicar'; motivos[m] = (motivos[m] || 0) + 1; });
+  barrasH($('#g-perdidos'), Object.entries(motivos).map(([m, n]) => ({ etiqueta: m, valor: n, lineas: [{ valor: String(n), texto: n === 1 ? 'prospecto' : 'prospectos' }, { valor: Math.round(n / per.length * 100) + '%', texto: 'de los perdidos' }] })).sort((a, b) => b.valor - a.valor));
+  const serv = {};
+  ps.forEach((p) => { const k = p.servicio || 'Sin indicar'; (serv[k] ||= { n: 0, g: 0 }); serv[k].n++; if (p.etapa === 'Ganado') serv[k].g++; });
+  barrasH($('#g-servicios'), Object.entries(serv).map(([k, v]) => ({ etiqueta: k, valor: v.n, lineas: [{ valor: String(v.n), texto: 'prospectos' }, { valor: String(v.g), texto: 'ganados' }] })).sort((a, b) => b.valor - a.valor));
 }
 
 function pintarEvolucion() {

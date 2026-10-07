@@ -32,6 +32,7 @@ create table if not exists prospectos (
   etapa text default 'Nuevo',
   monto numeric,
   seguimiento date,
+  motivo_perdida text,
   notas text,
   created_by text,
   created_at timestamptz default now()
@@ -45,6 +46,9 @@ create table if not exists expedientes (
   descripcion text,
   estado text,
   responsable text,
+  numero_causa text,
+  juzgado text,
+  contraparte text,
   fecha_inicio date,
   fecha_limite date,
   honorarios numeric,
@@ -83,6 +87,7 @@ create table if not exists tareas (
   tipo text,
   fecha timestamptz,
   cliente_id uuid references clientes(id) on delete cascade,
+  expediente_id uuid references expedientes(id) on delete set null,
   hecho boolean default false,
   notas text,
   created_by text,
@@ -133,11 +138,34 @@ create table if not exists metricas (
   unique (perfil, periodo)
 );
 
+-- Bitácora de cada expediente (notas con fecha)
+create table if not exists bitacora (
+  id uuid primary key default gen_random_uuid(),
+  perfil text not null check (perfil in ('byc','seguros')),
+  expediente_id uuid references expedientes(id) on delete cascade,
+  cliente_id uuid references clientes(id) on delete cascade,
+  fecha date not null default current_date,
+  texto text not null,
+  created_by text,
+  created_at timestamptz default now()
+);
+
+-- Configuración (datos para documentos, requisitos por trámite...)
+create table if not exists config (
+  id uuid primary key default gen_random_uuid(),
+  perfil text not null check (perfil in ('byc','seguros')),
+  clave text not null,
+  valor jsonb,
+  created_by text,
+  created_at timestamptz default now(),
+  unique (perfil, clave)
+);
+
 -- Seguridad: solo usuarios con sesión iniciada pueden leer/escribir.
 do $$
 declare t text;
 begin
-  foreach t in array array['clientes','prospectos','expedientes','polizas','tareas','actividad','pagos','plantillas','metricas'] loop
+  foreach t in array array['clientes','prospectos','expedientes','polizas','tareas','actividad','pagos','plantillas','metricas','bitacora','config'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "usuarios autenticados" on %I', t);
     execute format('create policy "usuarios autenticados" on %I for all to authenticated using (true) with check (true)', t);

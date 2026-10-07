@@ -3,7 +3,24 @@ window.CAT = {
   etapas: ['Nuevo', 'Contactado', 'Cita', 'Propuesta / Cotización', 'Ganado', 'Perdido'],
   fuentes: ['Referido', 'Facebook', 'Instagram', 'WhatsApp', 'Google', 'Visita a oficina', 'Cliente anterior', 'Otro'],
   tiposPersona: ['Individual', 'Jurídica'],
-  tiposTarea: ['Llamada', 'WhatsApp', 'Cita', 'Seguimiento', 'Audiencia', 'Cobro', 'Renovación', 'Otro'],
+  tiposTarea: ['Cita', 'Audiencia', 'Plazo', 'Firma', 'Llamada', 'WhatsApp', 'Seguimiento', 'Cobro', 'Renovación', 'Otro'],
+  motivosPerdida: ['Precio / honorarios', 'Se fue con otro abogado, notario o agente', 'No respondió', 'Ya no lo necesita',
+    'Lo dejó para después', 'No era viable', 'Otro'],
+
+  // Venta cruzada: trámites de B&C que sugieren ofrecer un seguro en Seguros Bobadilla.
+  ventaCruzada: {
+    'Traspaso': { ramo: 'Vehículos', texto: 'seguro de vehículo' },
+    'Compraventa': { ramo: 'Hogar / Daños', texto: 'seguro de hogar / daños' },
+    'Sociedad': { ramo: 'Empresarial', texto: 'seguro empresarial o fianzas' },
+    'Patente de comercio': { ramo: 'Empresarial', texto: 'seguro para su negocio' },
+  },
+
+  // Textos por defecto de la cotización (se cambian en Configuración).
+  cotizacion: {
+    formaPago: '50% de anticipo al iniciar el trámite y 50% al momento de la entrega.',
+    condiciones: 'Los honorarios no incluyen impuestos, timbres fiscales, aranceles ni pagos a registros o instituciones, salvo que se indique lo contrario.',
+    validez: 15,
+  },
 
   // ---- B&C Abogados y Notarios ----
   tramites: ['Traspaso', 'Inactivación', 'Reposición', 'Patente de comercio', 'Sociedad',
