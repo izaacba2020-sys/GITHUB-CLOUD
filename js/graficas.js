@@ -391,9 +391,11 @@ function pintarProspectos() {
   const tasa = gan.length + per.length ? Math.round(gan.length / (gan.length + per.length) * 100) + '%' : '—';
   $('#st-prosp').innerHTML = kpisHTML([
     ['Tasa de cierre', tasa, 'ganados ÷ (ganados + perdidos)'],
+    ['Días promedio para cerrar', (() => { const c = gan.filter((p) => p.fecha_cierre); return c.length ? Math.round(c.reduce((s, p) => s + diasEntre(fechaContacto(p), p.fecha_cierre), 0) / c.length) : '—'; })(), 'desde que escribió hasta ganarlo'],
     ['Ganados', gan.length, money(gan.reduce((s, p) => s + Number(p.monto || 0), 0))],
     ['Perdidos', per.length],
     ['En negociación', abiertos.length, money(abiertos.reduce((s, p) => s + Number(p.monto || 0), 0))],
+    ['Antigüedad promedio abiertos', abiertos.length ? Math.round(abiertos.reduce((s, p) => s + diasEntre(fechaContacto(p), today()), 0) / abiertos.length) + ' días' : '—', `${abiertos.filter((p) => diasEntre(fechaContacto(p), today()) > 30).length} con más de 30 días`],
   ]);
   const motivos = {};
   per.forEach((p) => { const m = p.motivo_perdida || 'Sin indicar'; motivos[m] = (motivos[m] || 0) + 1; });

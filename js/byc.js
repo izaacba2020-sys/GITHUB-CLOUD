@@ -27,7 +27,8 @@ function datosEmpresa() {
 
 // ---------- Prospectos ----------
 async function ganarProspecto(p) {
-  await db.save('prospectos', { ...p, etapa: 'Ganado' }, `${p.titulo} → Ganado`);
+  p = { ...p, etapa: 'Ganado', fecha_cierre: today() };
+  await db.save('prospectos', p, `${p.titulo} → Ganado`);
   const seg = state.perfil === 'seguros';
   if (!confirm(`¡Ganado! 🎉\n¿${p.cliente_id ? '' : 'Registrar como cliente y '}abrir su ${seg ? 'póliza' : 'expediente'} con los datos del prospecto?`)) return render();
   let clienteId = p.cliente_id;
@@ -36,11 +37,12 @@ async function ganarProspecto(p) {
     await db.log('creó', 'cliente', `${c.nombre} (desde prospecto)`);
     state.data.clientes.push(c);
     clienteId = c.id;
-    await db.save('prospectos', { ...p, etapa: 'Ganado', cliente_id: clienteId }, false);
+    await db.save('prospectos', { ...p, cliente_id: clienteId }, false);
   }
   const pre = seg
     ? { cliente_id: clienteId, ramo: CAT.ramos.includes(p.servicio) ? p.servicio : '', prima: p.monto || '' }
     : { cliente_id: clienteId, tramite: CAT.tramites.includes(p.servicio) ? p.servicio : '', honorarios: p.monto || '', descripcion: p.titulo };
+  await render(); // refresca el tablero aunque se cancele el formulario
   editar(seg ? 'polizas' : 'expedientes', {}, pre);
 }
 
@@ -54,9 +56,25 @@ function perderProspecto(p) {
     data: {},
     onSave: async (out) => {
       const nota = `[${fmtDate(today())}] Perdido: ${out.motivo_perdida}${out.detalle ? ' — ' + out.detalle : ''}`;
-      await db.save('prospectos', { ...p, etapa: 'Perdido', motivo_perdida: out.motivo_perdida, notas: [p.notas, nota].filter(Boolean).join('\n') }, `${p.titulo} → Perdido (${out.motivo_perdida})`);
+      await db.save('prospectos', { ...p, etapa: 'Perdido', fecha_cierre: today(), motivo_perdida: out.motivo_perdida, notas: [p.notas, nota].filter(Boolean).join('\n') }, `${p.titulo} → Perdido (${out.motivo_perdida})`);
     },
   });
+}
+
+// Fecha en que el cliente escribió (si no se llenó, la fecha en que se registró en el CRM).
+const fechaContacto = (p) => p.fecha_contacto || (p.created_at || today()).slice(0, 10);
+const diasEntre = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 86400000);
+const textoDias = (n) => (n === 0 ? 'hoy' : n === 1 ? '1 día' : `${n} días`);
+
+function antiguedadProspecto(p) {
+  const desde = fechaContacto(p);
+  const f = new Date(desde + 'T12:00').toLocaleDateString('es-GT', { day: '2-digit', month: 'short' });
+  if (['Ganado', 'Perdido'].includes(p.etapa)) {
+    return p.fecha_cierre ? `<div class="muted">📩 ${f} · cerrado en ${textoDias(diasEntre(desde, p.fecha_cierre))}</div>` : `<div class="muted">📩 Escribió el ${f}</div>`;
+  }
+  const n = diasEntre(desde, today());
+  const cls = n > 30 ? 'bad' : n > 14 ? 'warn' : '';
+  return `<div class="muted">📩 ${f} · <span class="badge ${cls}" title="Tiempo desde que escribió">${n === 0 ? 'Escribió hoy' : `Hace ${textoDias(n)}`}</span></div>`;
 }
 
 function prospectosPorSeguir() {

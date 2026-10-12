@@ -219,6 +219,8 @@ const CAMPOS = {
   ],
   prospectos: [
     { k: 'titulo', label: '¿Qué necesita?', req: true, full: true, ph: () => (state.perfil === 'byc' ? 'Ej.: Compraventa de terreno en Mixco' : 'Ej.: Seguro para su Toyota Hilux 2022') },
+    { k: 'fecha_contacto', label: '¿Cuándo nos escribió?', type: 'date', req: true, def: today() },
+    { k: 'fuente', label: '¿Por dónde nos contactó?', type: 'select', options: CAT.fuentes },
     { k: 'cliente_id', label: 'Cliente existente', type: 'select', options: clienteOpts },
     { k: 'contacto', label: 'O nombre del prospecto' },
     { k: 'telefono', label: 'Teléfono', type: 'tel' },
@@ -520,6 +522,7 @@ function vProspectos(el) {
           <b>${esc(p.titulo)}</b>
           <div class="muted">${esc(p.cliente_id ? clienteNombre(p.cliente_id) : p.contacto || '')} ${p.servicio ? '· ' + esc(p.servicio) : ''}</div>
           ${p.monto ? `<div>${money(p.monto)}</div>` : ''}
+          ${antiguedadProspecto(p)}
           ${p.seguimiento && !['Ganado', 'Perdido'].includes(e) ? `<div class="muted">Seguimiento: ${venceBadge(p.seguimiento)}</div>` : ''}
           ${e === 'Perdido' && p.motivo_perdida ? `<div class="muted">Motivo: ${esc(p.motivo_perdida)}</div>` : ''}
           ${state.perfil === 'byc' && !['Ganado', 'Perdido'].includes(e) ? `<button class="btn sec sm kbtn" data-cot="${p.id}">📄 Cotización</button>` : ''}

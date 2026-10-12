@@ -29,6 +29,7 @@ Si tu base de datos se creó antes de una actualización, corre en **SQL Editor*
 - `supabase/actualizacion-1.sql`: cumpleaños, prima neta, pagos y plantillas de WhatsApp.
 - `supabase/actualizacion-2.sql`: fotos mensuales de la cartera para la evolución año con año (Estadísticas) y modalidad de pago de las pólizas.
 - `supabase/actualizacion-3.sql`: agenda y mejoras de B&C (motivo de pérdida, datos del proceso, audiencias por expediente, bitácora y configuración).
+- `supabase/actualizacion-4.sql`: fecha en que escribió el prospecto, por dónde nos contactó y fecha de cierre.
 
 ## Funciones
 - **Importar Excel** (Clientes → ⬆ Importar Excel): relaciona tus columnas, revisa y confirma. No duplica clientes (mismo nombre, DPI o NIT) ni pólizas (mismo número y aseguradora).
