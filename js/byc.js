@@ -44,7 +44,7 @@ async function ganarProspecto(p) {
     : (() => {
       const tar = tarifaPorId(p.tarifa_id), c = tar && calcTarifa(tar);
       return { cliente_id: clienteId, tramite: tar?.tramite || (CAT.tramites.includes(p.servicio) ? p.servicio : ''), descripcion: p.titulo,
-        tarifa_id: p.tarifa_id || '', honorarios: c ? c.honorarios : p.monto || '', gastos: c ? c.gastosCliente || '' : '',
+        tarifa_id: p.tarifa_id || '', honorarios: c ? c.honorarios : p.monto || '', gastos: c ? c.gastosCliente || '' : '', iva_pct: c ? String(c.ivaPct || 0) : '0',
         referido_por: p.referido_por || '', comision: c && p.referido_por ? c.comision.toFixed(2) : '' };
     })();
   await render(); // refresca el tablero aunque se cancele el formulario
@@ -339,9 +339,11 @@ function abrirCotizacion({ prospecto, expediente }) {
   };
   if (expediente) {
     data.honorarios = expediente.honorarios || '';
+    data.iva_pct = String(Number(expediente.iva_pct || 0));
     data.gastos = (expediente.desglose?.gastos ? lineasGastosCliente(expediente.desglose) : Number(expediente.gastos) ? [`Gastos = ${Number(expediente.gastos)}`] : []).join('\n');
   } else if (tar) {
     data.honorarios = tar.honorarios || '';
+    data.iva_pct = String(Number(tar.iva_pct || 0));
     data.gastos = lineasGastosCliente(tar).join('\n');
   } else data.honorarios = prospecto?.monto || '';
   if (tar?.descripcion && !expediente?.descripcion) data.descripcion = [data.descripcion, tar.descripcion].filter(Boolean).join('\n');
@@ -352,6 +354,7 @@ function abrirCotizacion({ prospecto, expediente }) {
       { k: 'telefono', label: 'Teléfono', type: 'tel' },
       { k: 'servicio', label: 'Servicio / trámite', req: true },
       { k: 'honorarios', label: 'Honorarios (Q)', type: 'number', req: true },
+      { k: 'iva_pct', label: 'IVA sobre honorarios', type: 'select', options: [{ v: '0', l: 'Sin IVA' }, { v: '12', l: 'IVA 12%' }, { v: '5', l: 'IVA 5%' }], def: '0' },
       { k: 'gastos', label: 'Gastos que paga el cliente (uno por línea: concepto = monto)', type: 'textarea', full: true, ph: 'Ej.: Timbres fiscales = 150' },
       { k: 'descripcion', label: 'Descripción del servicio', type: 'textarea', full: true },
       { k: 'formaPago', label: 'Forma de pago', type: 'textarea', full: true },
@@ -382,7 +385,7 @@ const gastosCotizacion = (o) => String(o.gastos || '').split('\n').map((l) => l.
   const m = l.match(/^(.*?)[=:]\s*Q?\s*([\d,.]+)\s*$/);
   return m ? { concepto: m[1].trim() || 'Gastos', monto: Number(m[2].replace(/,/g, '')) } : null;
 }).filter((g) => g && g.monto);
-const totalCotizacion = (o) => Number(o.honorarios || 0) + gastosCotizacion(o).reduce((s, g) => s + g.monto, 0);
+const totalCotizacion = (o) => Number(o.honorarios || 0) + ivaDe(o.honorarios, o.iva_pct) + gastosCotizacion(o).reduce((s, g) => s + g.monto, 0);
 
 async function generarCotizacionPDF(o) {
   await cargarJsPDF();
@@ -394,20 +397,21 @@ async function generarCotizacionPDF(o) {
   y = pdfCampo(doc, y, 'Servicio:', o.servicio);
   if (o.descripcion) y = pdfCampo(doc, y, 'Descripción:', o.descripcion);
   y += 3;
-  const gastos = gastosCotizacion(o), total = totalCotizacion(o);
-  if (gastos.length) {
+  const gastos = gastosCotizacion(o), total = totalCotizacion(o), iva = ivaDe(o.honorarios, o.iva_pct);
+  if (gastos.length || iva) {
     doc.setFontSize(10);
     const fila = (concepto, monto, negrita) => {
       doc.setFont('helvetica', negrita ? 'bold' : 'normal'); doc.setTextColor(...TINTA);
       doc.text(doc.splitTextToSize(concepto, W - 90), 22, y); doc.text(money(monto), W - 22, y, { align: 'right' }); y += 6;
     };
     fila('Honorarios profesionales', o.honorarios, true);
+    if (iva) fila(`IVA ${Number(o.iva_pct)}% sobre honorarios`, iva);
     gastos.forEach((g) => fila(g.concepto, g.monto));
     doc.setDrawColor(225, 225, 225); doc.setLineWidth(0.3); doc.line(18, y - 3, W - 18, y - 3);
     y += 2;
   }
   doc.setFillColor(250, 246, 238); doc.setDrawColor(...DORADO); doc.roundedRect(18, y, W - 36, 20, 2, 2, 'FD');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...GRIS); doc.text(gastos.length ? 'TOTAL A PAGAR' : 'HONORARIOS', 24, y + 7);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...GRIS); doc.text(gastos.length || iva ? 'TOTAL A PAGAR' : 'HONORARIOS', 24, y + 7);
   doc.setFontSize(16); doc.setTextColor(...TINTA); doc.text(money(total), 24, y + 15);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRIS);
   doc.text(doc.splitTextToSize(`(${numeroALetras(total)})`, 95), W - 24, y + 9, { align: 'right' });
@@ -448,13 +452,13 @@ async function generarReciboPDF(pg) {
   y = pdfCampo(doc, y, 'Recibimos de:', c.nombre, 110);
   if (c.nit) y = pdfCampo(doc, y, 'NIT:', c.nit, 110);
   y = pdfCampo(doc, y + 2, 'La cantidad de:', numeroALetras(Number(pg.monto)));
-  y = pdfCampo(doc, y, 'Por concepto de:', exp ? `${Number(exp.gastos) ? 'Honorarios y gastos' : 'Honorarios'} por ${exp.tramite}${exp.descripcion ? ' — ' + exp.descripcion : ''}` : 'Honorarios profesionales');
+  y = pdfCampo(doc, y, 'Por concepto de:', exp ? `${['Honorarios', Number(exp.iva_pct) && `IVA ${Number(exp.iva_pct)}%`, Number(exp.gastos) && 'gastos'].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' y $1')} por ${exp.tramite}${exp.descripcion ? ' — ' + exp.descripcion : ''}` : 'Honorarios profesionales');
   if (pg.metodo) y = pdfCampo(doc, y, 'Forma de pago:', pg.metodo + (pg.referencia ? ` (ref. ${pg.referencia})` : ''));
   if (pg.notas) y = pdfCampo(doc, y, 'Observaciones:', pg.notas);
   if (r) {
     y += 4;
     doc.setDrawColor(225, 225, 225); doc.setLineWidth(0.3); doc.line(18, y, W - 18, y); y += 7;
-    y = pdfCampo(doc, y, Number(exp.gastos) ? 'Total (hon. + gastos):' : 'Total honorarios:', money(r.total));
+    y = pdfCampo(doc, y, Number(exp.gastos) || Number(exp.iva_pct) ? 'Total a pagar:' : 'Total honorarios:', money(r.total));
     y = pdfCampo(doc, y, 'Total pagado:', money(r.pagado));
     y = pdfCampo(doc, y, 'Saldo pendiente:', money(r.saldo));
   }

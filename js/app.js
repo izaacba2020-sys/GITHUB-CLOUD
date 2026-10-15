@@ -245,6 +245,7 @@ const CAMPOS = {
     { k: 'fecha_limite', label: 'Fecha límite', type: 'date' },
     { k: 'tarifa_id', label: 'Precio del tarifario (llena los montos)', type: 'select', options: () => tarifaOpts(), full: true },
     { k: 'honorarios', label: 'Honorarios (Q)', type: 'number' },
+    { k: 'iva_pct', label: 'IVA sobre honorarios', type: 'select', options: [{ v: '0', l: 'Sin IVA' }, { v: '12', l: 'IVA 12%' }, { v: '5', l: 'IVA 5%' }], def: '0' },
     { k: 'gastos', label: 'Gastos que paga el cliente (Q)', type: 'number' },
     { k: 'anticipo', label: 'Anticipo inicial (Q)', type: 'number' },
     { k: 'referido_por', label: 'Referido por (si aplica)', ph: 'Nombre de quien lo refirió' },
@@ -587,7 +588,7 @@ function vExpedientes(el) {
           <div class="progress"><div style="width:${pct}%"></div></div><div class="muted">${pct}% completado · <a href="#" data-req="${x.id}">✎ editar requisitos</a></div></div>
           <div><div class="muted">Responsable: ${esc(x.responsable || '—')} · Inicio: ${fmtDate(x.fecha_inicio)}</div>
             <div style="margin:8px 0 4px"><b>Cobro al cliente</b> ${pagoBadge(r)}</div>${pagoBarra(r)}
-            ${Number(x.gastos) ? `<div class="muted">Honorarios ${money(x.honorarios)} + gastos ${money(x.gastos)}</div>` : ''}
+            ${Number(x.gastos) || Number(x.iva_pct) ? `<div class="muted">Honorarios ${money(x.honorarios)}${Number(x.iva_pct) ? ` + IVA ${Number(x.iva_pct)}% ${money(ivaDe(x.honorarios, x.iva_pct))}` : ''}${Number(x.gastos) ? ` + gastos ${money(x.gastos)}` : ''}</div>` : ''}
             ${x.referido_por || Number(x.comision) ? `<div class="muted">🤝 Referido por <b>${esc(x.referido_por || '—')}</b> · comisión ${money(x.comision)} ${Number(x.comision) ? (x.comision_pagada ? '<span class="badge ok">Pagada</span>' : `<span class="badge warn">Pendiente</span> <a href="#" data-compag="${x.id}">marcar pagada</a>`) : ''}</div>` : ''}
             ${Number(x.honorarios) ? `<div class="muted">Utilidad estimada: <b>${money(utilidadExp(x))}</b>${x.desglose?.nombre ? ` · precio “${esc(x.desglose.nombre)}”` : ''}</div>` : ''}
             <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-pagar="${x.id}">+ Registrar pago</button>${r.pagos.length ? `<button class="btn sec sm" data-verpagos="${x.id}">Ver pagos (${r.pagos.length})</button>` : ''}<button class="btn sec sm" data-cotexp="${x.id}">📄 Cotización</button></div></div></div>

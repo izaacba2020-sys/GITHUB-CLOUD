@@ -31,6 +31,7 @@ Si tu base de datos se creó antes de una actualización, corre en **SQL Editor*
 - `supabase/actualizacion-3.sql`: agenda y mejoras de B&C (motivo de pérdida, datos del proceso, audiencias por expediente, bitácora y configuración).
 - `supabase/actualizacion-4.sql`: fecha en que escribió el prospecto, por dónde nos contactó y fecha de cierre.
 - `supabase/actualizacion-5.sql`: tarifario de precios de B&C, referidos y comisiones.
+- `supabase/actualizacion-6.sql`: IVA opcional (12% o 5%) sobre honorarios.
 
 ## Funciones
 - **Importar Excel** (Clientes → ⬆ Importar Excel): relaciona tus columnas, revisa y confirma. No duplica clientes (mismo nombre, DPI o NIT) ni pólizas (mismo número y aseguradora).

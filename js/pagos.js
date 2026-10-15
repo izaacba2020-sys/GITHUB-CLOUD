@@ -54,7 +54,8 @@ function estadoPagoPoliza(p, pagos) {
 function estadoPagoExp(x, pagos) {
   const ps = pagosDe('expediente', x.id, pagos);
   // Total a cobrar = honorarios + gastos que paga el cliente.
-  const r = resumenPago(Number(x.honorarios || 0) + Number(x.gastos || 0), Number(x.anticipo || 0) + sumaMontos(ps));
+  // (+ IVA sobre honorarios si aplica)
+  const r = resumenPago(Number(x.honorarios || 0) + ivaDe(x.honorarios, x.iva_pct) + Number(x.gastos || 0), Number(x.anticipo || 0) + sumaMontos(ps));
   r.pagos = ps;
   return r;
 }

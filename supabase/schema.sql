@@ -28,6 +28,7 @@ create table if not exists tarifas (
   tramite text,
   descripcion text,
   honorarios numeric,
+  iva_pct numeric default 0,         -- 0 = sin IVA, 12 o 5
   gastos jsonb default '{}'::jsonb,   -- { timbres: { monto, cobrar }, courier: { ... }, ... }
   comision_tipo text default '%',     -- '%' de honorarios o 'Q' monto fijo
   comision_valor numeric,
@@ -74,6 +75,7 @@ create table if not exists expedientes (
   fecha_limite date,
   tarifa_id uuid references tarifas(id) on delete set null,
   honorarios numeric,
+  iva_pct numeric default 0,
   gastos numeric,
   anticipo numeric,
   referido_por text,

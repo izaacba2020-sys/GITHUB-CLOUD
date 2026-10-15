@@ -207,3 +207,5 @@ tr.inactiva td { opacity: .55; }
 td.baja, b.baja { color: var(--bad); }
 b.sube { color: var(--ok); }
 @media (max-width: 600px) { .gasto-fila { grid-template-columns: 1fr 100px; } .gasto-fila .check { grid-column: 1 / -1; } }
+.iva-box { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 10px; background: #f5f6f8; border-radius: 8px; }
+.iva-box select:disabled { opacity: .5; }
