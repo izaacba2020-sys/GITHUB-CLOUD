@@ -192,3 +192,18 @@ svg.viz { display: block; width: 100%; height: auto; overflow: visible; }
 /* Expedientes y prospectos */
 .exp-pie { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 6px; font-size: 13px; }
 .kbtn { margin-top: 6px; width: 100%; }
+
+/* Tarifario */
+.gastos-tabla { display: grid; gap: 6px; }
+.gasto-fila { display: grid; grid-template-columns: 1fr 130px 110px; gap: 10px; align-items: center; }
+.gasto-fila > label:first-child { margin: 0; color: var(--text); font-size: 14px; }
+.gasto-fila input[type=number] { padding: 6px 8px; }
+.resumen-tarifa { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 16px; padding: 12px; background: #faf6ee; border: 1px solid #e8dcc3; border-radius: 10px; }
+.resumen-tarifa div { display: grid; gap: 2px; }
+.resumen-tarifa span { font-size: 12px; color: var(--muted); }
+.resumen-tarifa b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.resumen-tarifa small { color: var(--muted); font-size: 11px; }
+tr.inactiva td { opacity: .55; }
+td.baja, b.baja { color: var(--bad); }
+b.sube { color: var(--ok); }
+@media (max-width: 600px) { .gasto-fila { grid-template-columns: 1fr 100px; } .gasto-fila .check { grid-column: 1 / -1; } }

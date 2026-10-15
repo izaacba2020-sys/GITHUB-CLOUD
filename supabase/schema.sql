@@ -21,6 +21,22 @@ create table if not exists clientes (
   created_at timestamptz default now()
 );
 
+create table if not exists tarifas (
+  id uuid primary key default gen_random_uuid(),
+  perfil text not null check (perfil in ('byc','seguros')),
+  nombre text not null,
+  tramite text,
+  descripcion text,
+  honorarios numeric,
+  gastos jsonb default '{}'::jsonb,   -- { timbres: { monto, cobrar }, courier: { ... }, ... }
+  comision_tipo text default '%',     -- '%' de honorarios o 'Q' monto fijo
+  comision_valor numeric,
+  dias_estimados numeric,
+  activo boolean default true,
+  notas text,
+  created_by text,
+  created_at timestamptz default now()
+);
 create table if not exists prospectos (
   id uuid primary key default gen_random_uuid(),
   perfil text not null check (perfil in ('byc','seguros')),
@@ -35,6 +51,8 @@ create table if not exists prospectos (
   fecha_contacto date,
   fuente text,
   fecha_cierre date,
+  referido_por text,
+  tarifa_id uuid references tarifas(id) on delete set null,
   motivo_perdida text,
   notas text,
   created_by text,
@@ -54,8 +72,14 @@ create table if not exists expedientes (
   contraparte text,
   fecha_inicio date,
   fecha_limite date,
+  tarifa_id uuid references tarifas(id) on delete set null,
   honorarios numeric,
+  gastos numeric,
   anticipo numeric,
+  referido_por text,
+  comision numeric,
+  comision_pagada boolean default false,
+  desglose jsonb,
   checklist jsonb default '[]'::jsonb,
   notas text,
   created_by text,
@@ -168,7 +192,7 @@ create table if not exists config (
 do $$
 declare t text;
 begin
-  foreach t in array array['clientes','prospectos','expedientes','polizas','tareas','actividad','pagos','plantillas','metricas','bitacora','config'] loop
+  foreach t in array array['clientes','prospectos','expedientes','polizas','tareas','actividad','pagos','plantillas','metricas','bitacora','config','tarifas'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "usuarios autenticados" on %I', t);
     execute format('create policy "usuarios autenticados" on %I for all to authenticated using (true) with check (true)', t);

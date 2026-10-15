@@ -30,6 +30,7 @@ Si tu base de datos se creó antes de una actualización, corre en **SQL Editor*
 - `supabase/actualizacion-2.sql`: fotos mensuales de la cartera para la evolución año con año (Estadísticas) y modalidad de pago de las pólizas.
 - `supabase/actualizacion-3.sql`: agenda y mejoras de B&C (motivo de pérdida, datos del proceso, audiencias por expediente, bitácora y configuración).
 - `supabase/actualizacion-4.sql`: fecha en que escribió el prospecto, por dónde nos contactó y fecha de cierre.
+- `supabase/actualizacion-5.sql`: tarifario de precios de B&C, referidos y comisiones.
 
 ## Funciones
 - **Importar Excel** (Clientes → ⬆ Importar Excel): relaciona tus columnas, revisa y confirma. No duplica clientes (mismo nombre, DPI o NIT) ni pólizas (mismo número y aseguradora).
@@ -38,6 +39,7 @@ Si tu base de datos se creó antes de una actualización, corre en **SQL Editor*
 - **Estadísticas**: vencimientos por mes, primas por aseguradora y ramo, primas por cobrar en los próximos 12 meses, pagos recibidos y evolución de la cartera con comparativo año con año.
 - **Agenda**: calendario por mes, semana o lista con citas, audiencias, seguimientos de prospectos, fechas límite, vencimientos y cumpleaños.
 - **B&C**: cotización de honorarios y recibos de pago en PDF (se generan en el navegador, no se guardan archivos), prospecto ganado → cliente + expediente, motivo de pérdida, datos del proceso, audiencias, bitácora, requisitos editables y venta cruzada hacia Seguros.
+- **Precios (B&C)**: tarifario con honorarios, gastos desglosados (al cliente o internos), comisión por referido y utilidad; se usa al crear expedientes, prospectos y cotizaciones. Las comisiones pendientes aparecen en Cobros.
 - **Configuración**: datos que salen en los PDF, textos de la cotización y requisitos por trámite.
 - **WhatsApp**: plantillas editables con variables como `{nombre}`, `{vence}` o `{monto}`, y cumpleaños próximos en *Inicio*.
 

@@ -53,7 +53,8 @@ function estadoPagoPoliza(p, pagos) {
 
 function estadoPagoExp(x, pagos) {
   const ps = pagosDe('expediente', x.id, pagos);
-  const r = resumenPago(Number(x.honorarios || 0), Number(x.anticipo || 0) + sumaMontos(ps));
+  // Total a cobrar = honorarios + gastos que paga el cliente.
+  const r = resumenPago(Number(x.honorarios || 0) + Number(x.gastos || 0), Number(x.anticipo || 0) + sumaMontos(ps));
   r.pagos = ps;
   return r;
 }
@@ -167,6 +168,7 @@ function vCobros(el) {
         <td>${money(r.total)}</td><td>${money(r.pagado)}</td><td>${pagoBadge(r)}</td>
         <td style="white-space:nowrap"><button class="btn sm" data-cobrar="${item.id}">+ Pago</button> <button class="btn wa sm" data-wa="${item.id}">WhatsApp</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">¡Todo cobrado! 🎉</td></tr>'}
     </tbody></table></div>
+    ${seg ? '' : tarjetaComisiones()}
     <div class="card"><h3>Últimos pagos recibidos</h3>${recientes.map((pg) => `<div class="list-item click" data-pago="${pg.id}"><div><b>${money(pg.monto)}</b> · ${esc(clienteNombre(pg.cliente_id))}<div class="muted">${fmtDate(pg.fecha)} ${pg.metodo ? '· ' + esc(pg.metodo) : ''} ${pg.referencia ? '· Ref. ' + esc(pg.referencia) : ''}</div></div><span style="display:flex;gap:6px;align-items:center">${state.perfil === 'byc' ? `<button class="btn sec sm" data-recibo="${pg.id}">🧾 Recibo</button>` : ''}<span class="muted">Editar</span></span></div>`).join('') || '<div class="empty">Aún no hay pagos</div>'}</div>`;
   const lista = seg ? state.data.polizas : state.data.expedientes;
   el.querySelectorAll('[data-cobrar]').forEach((b) => (b.onclick = () => registrarPago(tipo, lista.find((x) => x.id === b.dataset.cobrar))));
@@ -175,4 +177,5 @@ function vCobros(el) {
     abrirWhatsApp({ cliente: state.data.clientes.find((c) => c.id === item.cliente_id), [seg ? 'poliza' : 'expediente']: item, plantilla: seg ? 'Recordatorio de pago' : 'Recordatorio de saldo' });
   }));
   bindPagos(el);
+  if (!seg) bindComisiones(el);
 }

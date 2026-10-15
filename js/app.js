@@ -41,7 +41,7 @@ function asegLogo(nombre) {
 }
 
 // ---------- Capa de datos (Supabase o modo demo en el navegador) ----------
-const ENTIDAD = { clientes: 'cliente', prospectos: 'prospecto', expedientes: 'expediente', polizas: 'póliza', tareas: 'tarea', pagos: 'pago', plantillas: 'plantilla', bitacora: 'anotación' };
+const ENTIDAD = { clientes: 'cliente', prospectos: 'prospecto', expedientes: 'expediente', polizas: 'póliza', tareas: 'tarea', pagos: 'pago', plantillas: 'plantilla', bitacora: 'anotación', tarifas: 'precio' };
 
 function dbError(error) {
   const falta = error.code === 'PGRST205' || error.code === 'PGRST204' || error.code === '42P01' || /could not find|does not exist/i.test(error.message);
@@ -137,7 +137,7 @@ const db = {
 };
 
 async function loadAll() {
-  const tablas = ['clientes', 'prospectos', 'tareas', 'actividad', 'pagos', 'plantillas', 'polizas', 'expedientes', 'bitacora', 'config'];
+  const tablas = ['clientes', 'prospectos', 'tareas', 'actividad', 'pagos', 'plantillas', 'polizas', 'expedientes', 'bitacora', 'config', ...(state.perfil === 'byc' ? ['tarifas'] : [])];
   const res = await Promise.all(tablas.map((t) => db.list(t)));
   tablas.forEach((t, i) => (state.data[t] = res[i] || []));
   state.config = Object.fromEntries(state.data.config.map((r) => [r.clave, r.valor]));
@@ -221,6 +221,8 @@ const CAMPOS = {
     { k: 'titulo', label: '¿Qué necesita?', req: true, full: true, ph: () => (state.perfil === 'byc' ? 'Ej.: Compraventa de terreno en Mixco' : 'Ej.: Seguro para su Toyota Hilux 2022') },
     { k: 'fecha_contacto', label: '¿Cuándo nos escribió?', type: 'date', req: true, def: today() },
     { k: 'fuente', label: '¿Por dónde nos contactó?', type: 'select', options: CAT.fuentes },
+    { k: 'referido_por', label: 'Referido por (si aplica)', ph: 'Nombre de quien lo refirió' },
+    { k: 'tarifa_id', label: 'Precio del tarifario', type: 'select', perfil: 'byc', options: () => tarifaOpts() },
     { k: 'cliente_id', label: 'Cliente existente', type: 'select', options: clienteOpts },
     { k: 'contacto', label: 'O nombre del prospecto' },
     { k: 'telefono', label: 'Teléfono', type: 'tel' },
@@ -241,8 +243,13 @@ const CAMPOS = {
     { k: 'contraparte', label: 'Parte contraria' },
     { k: 'fecha_inicio', label: 'Fecha de inicio', type: 'date', def: today() },
     { k: 'fecha_limite', label: 'Fecha límite', type: 'date' },
+    { k: 'tarifa_id', label: 'Precio del tarifario (llena los montos)', type: 'select', options: () => tarifaOpts(), full: true },
     { k: 'honorarios', label: 'Honorarios (Q)', type: 'number' },
+    { k: 'gastos', label: 'Gastos que paga el cliente (Q)', type: 'number' },
     { k: 'anticipo', label: 'Anticipo inicial (Q)', type: 'number' },
+    { k: 'referido_por', label: 'Referido por (si aplica)', ph: 'Nombre de quien lo refirió' },
+    { k: 'comision', label: 'Comisión al referido (Q)', type: 'number' },
+    { k: 'comision_pagada', label: '¿Comisión pagada?', type: 'select', options: [{ v: 'false', l: 'No' }, { v: 'true', l: 'Sí' }], def: 'false' },
     { k: 'notas', label: 'Notas', type: 'textarea', full: true },
   ],
   polizas: [
@@ -293,6 +300,11 @@ function editar(t, row = {}, extra = {}) {
     data,
     onSave: async (out) => {
       if (t === 'expedientes' && !row.id) out.checklist = checklistDe(out.tramite).map((x) => ({ t: x, ok: false }));
+      if (t === 'expedientes') {
+        out.comision_pagada = String(out.comision_pagada) === 'true';
+        if (out.tarifa_id && out.tarifa_id !== row.tarifa_id) out.desglose = desgloseDe(out.tarifa_id);
+        if (!out.tarifa_id) out.desglose = null;
+      }
       if (t === 'tareas' && out.expediente_id && !out.cliente_id) out.cliente_id = state.data.expedientes.find((x) => x.id === out.expediente_id)?.cliente_id || '';
       await db.save(t, out, descOf(t, out));
       if (t === 'expedientes' && !row.id) await ofrecerVentaCruzada(out);
@@ -304,6 +316,7 @@ function editar(t, row = {}, extra = {}) {
     } : null,
   });
   if (t === 'polizas') enlazarCuotas();
+  if (t === 'expedientes' || t === 'prospectos') enlazarTarifa(t);
 }
 
 // En el formulario de póliza, las cuotas disponibles cambian con la modalidad y la aseguradora.
@@ -327,6 +340,7 @@ const VISTAS = {
   prospectos: { nombre: 'Prospectos', fn: vProspectos },
   clientes: { nombre: 'Clientes', fn: vClientes },
   expedientes: { nombre: 'Expedientes', fn: vExpedientes, perfil: 'byc' },
+  precios: { nombre: 'Precios', fn: vPrecios, perfil: 'byc' },
   polizas: { nombre: 'Pólizas', fn: vPolizas, perfil: 'seguros' },
   aseguradoras: { nombre: 'Aseguradoras', fn: vAseguradoras, perfil: 'seguros' },
   renovaciones: { nombre: 'Renovaciones', fn: vRenovaciones, perfil: 'seguros' },
@@ -572,7 +586,10 @@ function vExpedientes(el) {
         <div class="grid2"><div class="checklist">${cl.map((i, n) => `<label><input type="checkbox" data-chk="${x.id}" data-n="${n}" ${i.ok ? 'checked' : ''}>${esc(i.t)}</label>`).join('')}
           <div class="progress"><div style="width:${pct}%"></div></div><div class="muted">${pct}% completado · <a href="#" data-req="${x.id}">✎ editar requisitos</a></div></div>
           <div><div class="muted">Responsable: ${esc(x.responsable || '—')} · Inicio: ${fmtDate(x.fecha_inicio)}</div>
-            <div style="margin:8px 0 4px"><b>Honorarios</b> ${pagoBadge(r)}</div>${pagoBarra(r)}
+            <div style="margin:8px 0 4px"><b>Cobro al cliente</b> ${pagoBadge(r)}</div>${pagoBarra(r)}
+            ${Number(x.gastos) ? `<div class="muted">Honorarios ${money(x.honorarios)} + gastos ${money(x.gastos)}</div>` : ''}
+            ${x.referido_por || Number(x.comision) ? `<div class="muted">🤝 Referido por <b>${esc(x.referido_por || '—')}</b> · comisión ${money(x.comision)} ${Number(x.comision) ? (x.comision_pagada ? '<span class="badge ok">Pagada</span>' : `<span class="badge warn">Pendiente</span> <a href="#" data-compag="${x.id}">marcar pagada</a>`) : ''}</div>` : ''}
+            ${Number(x.honorarios) ? `<div class="muted">Utilidad estimada: <b>${money(utilidadExp(x))}</b>${x.desglose?.nombre ? ` · precio “${esc(x.desglose.nombre)}”` : ''}</div>` : ''}
             <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-pagar="${x.id}">+ Registrar pago</button>${r.pagos.length ? `<button class="btn sec sm" data-verpagos="${x.id}">Ver pagos (${r.pagos.length})</button>` : ''}<button class="btn sec sm" data-cotexp="${x.id}">📄 Cotización</button></div></div></div>
         <div class="exp-pie">
           <div>${prox ? `📅 <b>Próximo:</b> ${esc(prox.tipo || 'Cita')} · ${fmtDateTime(prox.fecha)} — ${esc(prox.titulo)}` : '<span class="muted">Sin audiencias ni citas próximas</span>'}</div>
@@ -585,6 +602,7 @@ function vExpedientes(el) {
     el.querySelectorAll('[data-ed]').forEach((b) => (b.onclick = () => editar('expedientes', exp(b.dataset.ed))));
     el.querySelectorAll('[data-pagar]').forEach((b) => (b.onclick = () => registrarPago('expediente', exp(b.dataset.pagar))));
     el.querySelectorAll('[data-req]').forEach((b) => (b.onclick = (ev) => { ev.preventDefault(); editarRequisitos(exp(b.dataset.req)); }));
+    el.querySelectorAll('[data-compag]').forEach((b) => (b.onclick = (ev) => { ev.preventDefault(); marcarComisionPagada(exp(b.dataset.compag)); }));
     el.querySelectorAll('[data-bit]').forEach((b) => (b.onclick = () => abrirBitacora(exp(b.dataset.bit))));
     el.querySelectorAll('[data-cotexp]').forEach((b) => (b.onclick = () => abrirCotizacion({ expediente: exp(b.dataset.cotexp) })));
     el.querySelectorAll('[data-aud]').forEach((b) => (b.onclick = () => { const x = exp(b.dataset.aud); editar('tareas', {}, { tipo: 'Audiencia', expediente_id: x.id, cliente_id: x.cliente_id }); }));
