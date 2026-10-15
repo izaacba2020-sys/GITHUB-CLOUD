@@ -11,6 +11,14 @@ const GASTOS_TARIFA = [
 ];
 const nombreGasto = (k) => (GASTOS_TARIFA.find((g) => g[0] === k) || [k, k])[1];
 const IVA_OPCIONES = [12, 5];
+// Opciones de IVA para los formularios (incluye un porcentaje distinto si ya estaba guardado).
+const ivaOpts = (actual) => {
+  const ops = [{ v: '0', l: 'Sin IVA' }, ...IVA_OPCIONES.map((p) => ({ v: String(p), l: `IVA ${p}%` }))];
+  if (Number(actual) && !IVA_OPCIONES.includes(Number(actual))) ops.push({ v: String(Number(actual)), l: `IVA ${Number(actual)}%` });
+  return ops;
+};
+// Conceptos de gasto agregados a mano (gastos.extra = [{ nombre, monto, cobrar }]).
+const gastosExtra = (t) => (t?.gastos?.extra || []).filter((x) => x && (x.nombre || Number(x.monto)));
 const ivaDe = (honorarios, pct) => Math.round(Number(honorarios || 0) * Number(pct || 0)) / 100;
 
 // Cálculo de precio, comisión y utilidad de una tarifa.
@@ -21,6 +29,7 @@ function calcTarifa(t = {}) {
     if (!g || !Number(g.monto)) continue;
     if (g.cobrar) gastosCliente += Number(g.monto); else gastosInternos += Number(g.monto);
   }
+  for (const x of gastosExtra(t)) { if (x.cobrar) gastosCliente += Number(x.monto || 0); else gastosInternos += Number(x.monto || 0); }
   const honorarios = Number(t.honorarios || 0);
   const comision = t.comision_tipo === 'Q' ? Number(t.comision_valor || 0) : honorarios * Number(t.comision_valor || 0) / 100;
   // El IVA se cobra sobre los honorarios; no es utilidad (se paga a la SAT).
@@ -34,7 +43,10 @@ const tarifaOpts = () => (state.data.tarifas || []).filter((t) => t.activo !== f
 const textoComision = (t) => (Number(t.comision_valor) ? (t.comision_tipo === 'Q' ? money(t.comision_valor) : `${Number(t.comision_valor)}% de honorarios`) : 'Sin comisión');
 
 // Gastos que paga el cliente, como líneas "concepto = monto" (para la cotización).
-const lineasGastosCliente = (t) => GASTOS_TARIFA.filter(([k]) => t?.gastos?.[k]?.cobrar && Number(t.gastos[k].monto)).map(([k, l]) => `${l} = ${Number(t.gastos[k].monto)}`);
+const lineasGastosCliente = (t) => [
+  ...GASTOS_TARIFA.filter(([k]) => t?.gastos?.[k]?.cobrar && Number(t.gastos[k].monto)).map(([k, l]) => `${l} = ${Number(t.gastos[k].monto)}`),
+  ...gastosExtra(t).filter((x) => x.cobrar && Number(x.monto)).map((x) => `${x.nombre || 'Otro gasto'} = ${Number(x.monto)}`),
+];
 
 // ---------- Vista ----------
 function vPrecios(el) {
@@ -78,14 +90,18 @@ function editarTarifa(t = {}) {
       <div><label>Tiempo estimado (días hábiles)</label><input type="number" name="dias_estimados" value="${esc(t.dias_estimados ?? '')}"></div>
       <div><label>Honorarios (Q) *</label><input type="number" step="0.01" name="honorarios" required value="${esc(t.honorarios ?? '')}"></div>
       <div class="iva-box full"><label class="check"><input type="checkbox" id="iva-on" ${Number(t.iva_pct) ? 'checked' : ''}> Cobrar IVA sobre los honorarios</label>
-        <select id="iva-pct" style="width:auto" ${Number(t.iva_pct) ? '' : 'disabled'}>${IVA_OPCIONES.map((p) => `<option value="${p}" ${Number(t.iva_pct || 12) === p ? 'selected' : ''}>IVA ${p}%</option>`).join('')}</select></div>
+        <select id="iva-pct" style="width:auto" ${Number(t.iva_pct) ? '' : 'disabled'}>${IVA_OPCIONES.map((p) => `<option value="${p}" ${Number(t.iva_pct || 12) === p ? 'selected' : ''}>IVA ${p}%</option>`).join('')}
+          <option value="otro" ${Number(t.iva_pct) && !IVA_OPCIONES.includes(Number(t.iva_pct)) ? 'selected' : ''}>Otro %</option></select>
+        <input type="number" step="0.01" id="iva-otro" style="width:90px" placeholder="%" value="${Number(t.iva_pct) && !IVA_OPCIONES.includes(Number(t.iva_pct)) ? Number(t.iva_pct) : ''}"></div>
       <div><label>Activo</label><select name="activo"><option value="true" ${t.activo !== false ? 'selected' : ''}>Sí</option><option value="false" ${t.activo === false ? 'selected' : ''}>No (ya no se ofrece)</option></select></div>
     </form>
     <h3 style="margin-top:16px">Gastos</h3>
     <p class="muted" style="margin-top:0">Marca <b>“Al cliente”</b> si ese gasto se le cobra aparte; si no, lo absorbe la oficina y se resta de la utilidad.</p>
     <div class="gastos-tabla">${GASTOS_TARIFA.map(([k, l, def]) => { const x = g(k, def); return `
       <div class="gasto-fila"><label>${esc(l)}</label><input type="number" step="0.01" data-gasto="${k}" value="${esc(x.monto ?? '')}" placeholder="0.00">
-        <label class="check"><input type="checkbox" data-cobrar="${k}" ${x.cobrar ? 'checked' : ''}> Al cliente</label></div>`; }).join('')}</div>
+        <label class="check"><input type="checkbox" data-cobrar="${k}" ${x.cobrar ? 'checked' : ''}> Al cliente</label></div>`; }).join('')}
+      <div id="extras"></div></div>
+    <button class="btn sec sm" id="add-extra" type="button" style="margin-top:8px">+ Agregar otro concepto</button>
     <h3 style="margin-top:16px">Comisión por referido</h3>
     <div class="form">
       <div><label>Tipo de comisión</label><select id="ct"><option value="%" ${t.comision_tipo !== 'Q' ? 'selected' : ''}>% de los honorarios</option><option value="Q" ${t.comision_tipo === 'Q' ? 'selected' : ''}>Monto fijo (Q)</option></select></div>
@@ -104,8 +120,13 @@ function editarTarifa(t = {}) {
     const f = Object.fromEntries(new FormData($('#f-tar')));
     const gastos = {};
     GASTOS_TARIFA.forEach(([k]) => { const m = $(`[data-gasto="${k}"]`).value; gastos[k] = { monto: m === '' ? 0 : Number(m), cobrar: $(`[data-cobrar="${k}"]`).checked }; });
-    $('#iva-pct').disabled = !$('#iva-on').checked;
-    return { ...t, ...f, iva_pct: $('#iva-on').checked ? Number($('#iva-pct').value) : 0, activo: f.activo === 'true', dias_estimados: f.dias_estimados || null, gastos, comision_tipo: $('#ct').value, comision_valor: $('#cv').value || 0, descripcion: $('#desc').value, notas: $('#notas').value };
+    gastos.extra = [...document.querySelectorAll('#extras .gasto-fila')].map((r) => ({
+      nombre: r.querySelector('[data-xn]').value.trim(), monto: Number(r.querySelector('[data-xm]').value || 0), cobrar: r.querySelector('[data-xc]').checked,
+    })).filter((x) => x.nombre || x.monto);
+    const on = $('#iva-on').checked, sel = $('#iva-pct').value;
+    $('#iva-pct').disabled = !on;
+    $('#iva-otro').style.display = on && sel === 'otro' ? '' : 'none';
+    return { ...t, ...f, iva_pct: on ? Number(sel === 'otro' ? $('#iva-otro').value || 0 : sel) : 0, activo: f.activo === 'true', dias_estimados: f.dias_estimados || null, gastos, comision_tipo: $('#ct').value, comision_valor: $('#cv').value || 0, descripcion: $('#desc').value, notas: $('#notas').value };
   };
   const resumen = () => {
     const c = calcTarifa(leer());
@@ -118,6 +139,14 @@ function editarTarifa(t = {}) {
       <div><span>Utilidad cliente directo</span><b class="${c.utilDirecto < 0 ? 'baja' : 'sube'}">${money(c.utilDirecto)}</b></div>
       <div><span>Utilidad con referido</span><b class="${c.utilReferido < 0 ? 'baja' : 'sube'}">${money(c.utilReferido)}</b></div>`;
   };
+  const filaExtra = (x = { nombre: '', monto: '', cobrar: true }) => {
+    $('#extras').insertAdjacentHTML('beforeend', `<div class="gasto-fila extra"><input data-xn placeholder="Nombre del concepto (ej.: Avalúo, Edicto, Publicación)" value="${esc(x.nombre)}">
+      <input type="number" step="0.01" data-xm placeholder="0.00" value="${esc(x.monto || '')}">
+      <span style="display:flex;gap:8px;align-items:center"><label class="check"><input type="checkbox" data-xc ${x.cobrar ? 'checked' : ''}> Al cliente</label><button type="button" class="btn sec sm" data-xdel title="Quitar">✕</button></span></div>`);
+  };
+  gastosExtra(t).forEach(filaExtra);
+  $('#add-extra').onclick = () => { filaExtra(); $('#extras .gasto-fila:last-child [data-xn]').focus(); resumen(); };
+  $('#extras').addEventListener('click', (e) => { if (e.target.dataset.xdel !== undefined) { e.target.closest('.gasto-fila').remove(); resumen(); } });
   // Los oyentes van en el contenido de este formulario (no en la ventana, que se reutiliza).
   $('#tar-wrap').addEventListener('input', resumen);
   $('#tar-wrap').addEventListener('change', resumen);
@@ -150,6 +179,8 @@ function enlazarTarifa(t) {
       if (cambioTarifa) {
         set('honorarios', c.honorarios || '');
         set('gastos', c.gastosCliente || '');
+        const ivaSel = $('[name=iva_pct]');
+        if (ivaSel && c.ivaPct && ![...ivaSel.options].some((o) => o.value === String(c.ivaPct))) ivaSel.insertAdjacentHTML('beforeend', `<option value="${c.ivaPct}">IVA ${c.ivaPct}%</option>`);
         set('iva_pct', String(c.ivaPct || 0));
         if (tar.tramite) set('tramite', tar.tramite);
       }

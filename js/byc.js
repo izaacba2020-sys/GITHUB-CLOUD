@@ -354,7 +354,7 @@ function abrirCotizacion({ prospecto, expediente }) {
       { k: 'telefono', label: 'Teléfono', type: 'tel' },
       { k: 'servicio', label: 'Servicio / trámite', req: true },
       { k: 'honorarios', label: 'Honorarios (Q)', type: 'number', req: true },
-      { k: 'iva_pct', label: 'IVA sobre honorarios', type: 'select', options: [{ v: '0', l: 'Sin IVA' }, { v: '12', l: 'IVA 12%' }, { v: '5', l: 'IVA 5%' }], def: '0' },
+      { k: 'iva_pct', label: 'IVA sobre honorarios', type: 'select', options: ivaOpts(data.iva_pct), def: '0' },
       { k: 'gastos', label: 'Gastos que paga el cliente (uno por línea: concepto = monto)', type: 'textarea', full: true, ph: 'Ej.: Timbres fiscales = 150' },
       { k: 'descripcion', label: 'Descripción del servicio', type: 'textarea', full: true },
       { k: 'formaPago', label: 'Forma de pago', type: 'textarea', full: true },

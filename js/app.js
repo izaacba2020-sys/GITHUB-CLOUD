@@ -245,7 +245,7 @@ const CAMPOS = {
     { k: 'fecha_limite', label: 'Fecha límite', type: 'date' },
     { k: 'tarifa_id', label: 'Precio del tarifario (llena los montos)', type: 'select', options: () => tarifaOpts(), full: true },
     { k: 'honorarios', label: 'Honorarios (Q)', type: 'number' },
-    { k: 'iva_pct', label: 'IVA sobre honorarios', type: 'select', options: [{ v: '0', l: 'Sin IVA' }, { v: '12', l: 'IVA 12%' }, { v: '5', l: 'IVA 5%' }], def: '0' },
+    { k: 'iva_pct', label: 'IVA sobre honorarios', type: 'select', options: () => ivaOpts(state.editando?.iva_pct), def: '0' },
     { k: 'gastos', label: 'Gastos que paga el cliente (Q)', type: 'number' },
     { k: 'anticipo', label: 'Anticipo inicial (Q)', type: 'number' },
     { k: 'referido_por', label: 'Referido por (si aplica)', ph: 'Nombre de quien lo refirió' },
