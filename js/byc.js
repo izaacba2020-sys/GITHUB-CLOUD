@@ -77,7 +77,7 @@ function antiguedadProspecto(p) {
   if (['Ganado', 'Perdido'].includes(p.etapa)) {
     return p.fecha_cierre ? `<div class="muted">📩 ${f} · cerrado en ${textoDias(diasEntre(desde, p.fecha_cierre))}</div>` : `<div class="muted">📩 Escribió el ${f}</div>`;
   }
-  const n = diasEntre(desde, today());
+  const n = Math.max(0, diasEntre(desde, today()));
   const cls = n > 30 ? 'bad' : n > 14 ? 'warn' : '';
   return `<div class="muted">📩 ${f} · <span class="badge ${cls}" title="Tiempo desde que escribió">${n === 0 ? 'Escribió hoy' : `Hace ${textoDias(n)}`}</span></div>`;
 }

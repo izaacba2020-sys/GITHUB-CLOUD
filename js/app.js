@@ -527,45 +527,6 @@ function fichaCliente(id) {
   $('#addM').onclick = () => editar(mod, {}, { cliente_id: id });
 }
 
-function vProspectos(el) {
-  el.innerHTML = `<div class="top"><span class="muted">Arrastra las tarjetas entre columnas o cambia la etapa en cada tarjeta.</span><button class="btn" id="nuevo">+ Nuevo prospecto</button></div>
-    <div class="kanban">${CAT.etapas.map((e) => {
-      const ps = state.data.prospectos.filter((p) => (p.etapa || 'Nuevo') === e);
-      const total = ps.reduce((s, p) => s + Number(p.monto || 0), 0);
-      return `<div class="col" data-etapa="${esc(e)}"><h4>${esc(e)} <span class="muted">${ps.length} · ${money(total)}</span></h4>
-        ${ps.map((p) => `<div class="kcard" draggable="true" data-id="${p.id}">
-          <b>${esc(p.titulo)}</b>
-          <div class="muted">${esc(p.cliente_id ? clienteNombre(p.cliente_id) : p.contacto || '')} ${p.servicio ? '· ' + esc(p.servicio) : ''}</div>
-          ${p.monto ? `<div>${money(p.monto)}</div>` : ''}
-          ${antiguedadProspecto(p)}
-          ${p.seguimiento && !['Ganado', 'Perdido'].includes(e) ? `<div class="muted">Seguimiento: ${venceBadge(p.seguimiento)}</div>` : ''}
-          ${e === 'Perdido' && p.motivo_perdida ? `<div class="muted">Motivo: ${esc(p.motivo_perdida)}</div>` : ''}
-          ${state.perfil === 'byc' && !['Ganado', 'Perdido'].includes(e) ? `<button class="btn sec sm kbtn" data-cot="${p.id}">📄 Cotización</button>` : ''}
-          <select data-etapa-sel="${p.id}">${CAT.etapas.map((x) => `<option ${x === e ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
-        </div>`).join('')}</div>`;
-    }).join('')}</div>`;
-  $('#nuevo').onclick = () => editar('prospectos');
-  const mover = async (id, etapa) => {
-    const p = state.data.prospectos.find((x) => x.id === id);
-    if (!p || p.etapa === etapa) return;
-    if (etapa === 'Ganado') return ganarProspecto(p);
-    if (etapa === 'Perdido') return perderProspecto(p);
-    await db.save('prospectos', { ...p, etapa }, `${p.titulo} → ${etapa}`);
-    render();
-  };
-  el.querySelectorAll('.kcard').forEach((k) => {
-    k.ondragstart = (e) => e.dataTransfer.setData('id', k.dataset.id);
-    k.onclick = (e) => { if (e.target.tagName !== 'SELECT' && !e.target.dataset.cot) editar('prospectos', state.data.prospectos.find((x) => x.id === k.dataset.id)); };
-  });
-  el.querySelectorAll('[data-etapa-sel]').forEach((s) => (s.onchange = () => mover(s.dataset.etapaSel, s.value)));
-  el.querySelectorAll('[data-cot]').forEach((b) => (b.onclick = () => abrirCotizacion({ prospecto: state.data.prospectos.find((x) => x.id === b.dataset.cot) })));
-  el.querySelectorAll('.col').forEach((c) => {
-    c.ondragover = (e) => { e.preventDefault(); c.classList.add('over'); };
-    c.ondragleave = () => c.classList.remove('over');
-    c.ondrop = (e) => { e.preventDefault(); c.classList.remove('over'); mover(e.dataTransfer.getData('id'), c.dataset.etapa); };
-  });
-}
-
 function vExpedientes(el) {
   el.innerHTML = `<div class="top"><div style="display:flex;gap:8px;flex-wrap:wrap">
       <input class="search" id="q" placeholder="Buscar...">

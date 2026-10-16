@@ -211,3 +211,17 @@ b.sube { color: var(--ok); }
 .iva-box select:disabled { opacity: .5; }
 .gasto-fila.extra { grid-template-columns: 1fr 130px 150px; }
 @media (max-width: 600px) { .gasto-fila.extra { grid-template-columns: 1fr 100px; } .gasto-fila.extra > span { grid-column: 1 / -1; } }
+
+/* Prospectos: búsqueda, filtros y orden */
+.pf-barra { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.pf-barra .search { width: 300px; }
+.pf-lbl { display: inline-flex; gap: 6px; align-items: center; margin: 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.pf-lbl select, .pf-lbl input { width: auto; }
+.pf-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.pf-filtros select, .pf-filtros input { width: auto; padding: 6px 8px; font-size: 13px; }
+.pf-info { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.tabla-prosp td { font-size: 13px; }
+.tabla-prosp select { padding: 4px; font-size: 12px; }
+.th-orden { cursor: pointer; user-select: none; }
+.th-orden:hover, .th-orden.activo { color: var(--text); }
+@media (max-width: 800px) { .pf-barra .search { width: 100%; } #nuevo { margin-left: 0 !important; } }
